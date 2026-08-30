@@ -1,0 +1,44 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: demo
+  flyway:
+    enabled: false
+  datasource:
+    url: jdbc:mysql://localhost:3306/demo?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: demo
+    password: demo
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      # 애플리케이션 시작 시 DB 연결을 만들지 않고 실제 요청 시 생성합니다.
+      minimum-idle: 0
+      initialization-fail-timeout: -1
+  mvc:
+    view:
+      prefix: /WEB-INF/views/
+      suffix: .jsp
+  mail:
+    host: smtp.gmail.com
+    port: 587 # 안되면 465
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    # Google 보안에서 '앱 비밀번호(16자리)'를 발급받아 입력해야 합니다.
+    properties:
+      mail:
+        smtp:
+          auth: true
+          connectiontimeout: 5000
+          timeout: 5000
+          starttls:
+            enable: true
+
+mybatis:
+  mapper-locations: classpath:repository/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+custom:
+  cron: "0 0 3 * * *"
