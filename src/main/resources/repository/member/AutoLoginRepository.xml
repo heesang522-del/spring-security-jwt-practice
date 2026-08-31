@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.demo.repository.AutoLoginRepository">
+
+    <!-- 1 합침: 자동 로그인 토큰 저장 및 갱신 (UPSERT) -->
+    <insert id="upsertToken">
+        INSERT INTO remember_me (
+                     member_id,
+                     token,
+                     limit_date
+        ) VALUES (
+                      #{memberId},
+                      #{token},
+                      #{limitDate}
+                         )
+            ON DUPLICATE KEY UPDATE
+                token = #{token},
+                limit_date = #{limitDate}
+    </insert>
+
+    <!-- 2. 토큰으로 회원 아이디 조회 (만료일이 현재시간보다 이후인 경우만 조회) -->
+    <select id="findMemberIdByToken" resultType="string">
+        SELECT member_id
+        FROM remember_me
+        WHERE token = #{token}
+          AND limit_date > NOW()
+    </select>
+
+    <!-- 3. 토큰 직접 삭제 (로그아웃용) -->
+    <delete id="deleteByToken" parameterType="string">
+        DELETE FROM remember_me
+        WHERE token = #{token}
+    </delete>
+
+</mapper>
