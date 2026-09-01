@@ -357,6 +357,7 @@ JWT 전환이 완료되면 로그인 인증 구조는 다음과 같다.
 
 * [x] 기존 Session 기반 로그인 구조 분석
 * [ ] JWT 의존성 추가
+* [ ] Dto 분리
 * [ ] `JwtTokenProvider` 구현
 * [ ] `JwtAuthenticationFilter` 구현
 * [ ] `SecurityConfig` JWT 방식으로 변경
