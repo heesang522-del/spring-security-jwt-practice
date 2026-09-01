@@ -11,6 +11,8 @@ CREATE TABLE member (
     member_status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' COMMENT '상태 (ACTIVE, DORMANT, BANNED, DELETED)',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '가입일',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '수정일',
+    deleted_at DATETIME NULL COMMENT '삭제일(탈퇴일)',
+    last_login_at DATETIME NULL COMMENT '마지막 로그인 일시',
     PRIMARY KEY (id),
     UNIQUE KEY uq_member_id (member_id),
     UNIQUE KEY uq_member_nickname (nickname),
