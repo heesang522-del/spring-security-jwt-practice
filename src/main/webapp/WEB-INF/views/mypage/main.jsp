@@ -29,7 +29,7 @@
                         </c:when>
                         <c:otherwise>
                             <img id="mainAvatarImg"
-                                 src="${pageContext.request.contextPath}/upload/profile/default-profile.svg"
+                                 src="${pageContext.request.contextPath}/uploads/profile/default-profile.svg"
                                  class="profile-img"
                                  alt="기본 프로필 사진">
                         </c:otherwise>

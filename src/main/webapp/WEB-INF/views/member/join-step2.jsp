@@ -10,7 +10,7 @@
     <!-- 프로필 이미지 미리보기 -->
     <div class="profile-img-preview" id="image-preview">
       <img id="preview-img"
-           src="${ctx}/upload/profile/default-profile.svg"
+           src="${ctx}/uploads/profile/default-profile.svg"
            alt="프로필 미리보기">
     </div>
 
@@ -47,7 +47,7 @@
   let isNicknameChecked = false;
 
   // 기본 프로필 경로 설정
-  const DEFAULT_PROFILE_URL = "${ctx}/upload/profile/default-profile.svg";
+  const DEFAULT_PROFILE_URL = "${ctx}/uploads/profile/default-profile.svg";
 
   // 프로필 이미지 미리보기 함수 (완전 수정본)
   function previewImage(input) {

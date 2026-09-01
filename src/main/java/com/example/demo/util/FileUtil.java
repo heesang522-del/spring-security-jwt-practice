@@ -12,7 +12,7 @@ import java.util.UUID;
 @Component
 public class FileUtil {
 
-    private static final String UPLOAD_BASE_DIR = File.separator + "upload" + File.separator;
+    private static final String UPLOAD_BASE_DIR = File.separator + "uploads" + File.separator;
 
     /**
      * 범용 파일 저장 (트랜잭션 롤백/커밋 자동 동기화)
@@ -38,7 +38,7 @@ public class FileUtil {
 
         try {
             multipartFile.transferTo(dest);
-            String newFilePath = "/upload/" + subDir + "/" + savedFileName;
+            String newFilePath = "/uploads/" + subDir + "/" + savedFileName;
 
             // 트랜잭션 동기화 (커밋 시 구 파일 삭제, 롤백 시 새 파일 삭제)
             if (TransactionSynchronizationManager.isSynchronizationActive()) {

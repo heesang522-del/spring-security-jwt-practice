@@ -34,7 +34,7 @@ public class SecurityConfig {
                 // .authenticationProvider(customAuthenticationProvider)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
-                                "/css/**", "/js/**", "/images/**", "/upload/**", "/error"
+                                "/css/**", "/js/**", "/images/**", "/uploads/**", "/error"
                         ).permitAll()
                         .requestMatchers(
                                 "/member/update**", "/member/delete", "/member/mypage", "/member/settings"

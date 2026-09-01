@@ -28,7 +28,7 @@
         <div class="profile-avatar-edit">
           <div class="profile-avatar" id="avatarPreviewContainer">
             <img id="mainAvatarImg"
-                 src="${not empty member.profileImage ? pageContext.request.contextPath.concat(member.profileImage) : pageContext.request.contextPath.concat('/upload/profile/default-profile.svg')}"
+                 src="${not empty member.profileImage ? pageContext.request.contextPath.concat(member.profileImage) : pageContext.request.contextPath.concat('/uploads/profile/default-profile.svg')}"
                  class="profile-img" alt="프로필 사진">
           </div>
           <button type="button" class="button button--secondary" onclick="openModal('modalProfile')">사진 변경</button>
@@ -177,7 +177,7 @@
 
       <div class="profile-avatar modal-avatar-wrapper" id="modalAvatarPreview">
         <img id="modalAvatarImg"
-             src="${not empty member.profileImage ? pageContext.request.contextPath.concat(member.profileImage) : pageContext.request.contextPath.concat('/upload/profile/default-profile.svg')}"
+             src="${not empty member.profileImage ? pageContext.request.contextPath.concat(member.profileImage) : pageContext.request.contextPath.concat('/uploads/profile/default-profile.svg')}"
              class="profile-img" alt="프로필 미리보기">
       </div>
 
@@ -232,8 +232,8 @@
 </div>
 
 <script>
-  const DEFAULT_IMAGE_SRC = "${pageContext.request.contextPath}/upload/profile/default-profile.svg";
-  const currentProfileImgSrc = "${not empty member.profileImage ? pageContext.request.contextPath.concat(member.profileImage) : pageContext.request.contextPath.concat('/upload/profile/default-profile.svg')}";
+  const DEFAULT_IMAGE_SRC = "${pageContext.request.contextPath}/uploads/profile/default-profile.svg";
+  const currentProfileImgSrc = "${not empty member.profileImage ? pageContext.request.contextPath.concat(member.profileImage) : pageContext.request.contextPath.concat('/uploads/profile/default-profile.svg')}";
 
   function openModal(id) {
     const modal = document.getElementById(id);

@@ -18,7 +18,7 @@ public class MemberDto {
     private String memberEmail;
     private String memberPhone;
     private String nickname;
-    private String profileImage; // DB 저장용 파일 경로 (/upload/profile/xxx.png)
+    private String profileImage; // DB 저장용 파일 경로 (/uploads/profile/xxx.png)
     private String memberRole;
     private String memberStatus;
     private LocalDateTime createdAt;
