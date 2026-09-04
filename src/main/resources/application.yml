@@ -42,3 +42,7 @@ mybatis:
 
 custom:
   cron: "0 0 3 * * *"
+
+jwt:
+  secret: my-temporary-secret-key-for-jwt-authentication-demo-project-2026-safe
+  access-token-expiration: 1800000 # 30분 (30 * 60 * 1000ms)
