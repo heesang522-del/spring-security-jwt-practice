@@ -31,8 +31,8 @@ public class JwtTokenProvider {
         this.accessTokenExpiration = accessTokenExpiration;
     }
 
-    // JWT 생성
-    public String generateToken(String memberId) {
+    // 💡 1. JWT 생성 (role 매개변수 추가 및 claim("role", role) 설정)
+    public String generateToken(String memberId, String role) {
 
         Date now = new Date();
         Date expiration = new Date(
@@ -41,6 +41,7 @@ public class JwtTokenProvider {
 
         return Jwts.builder()
                 .subject(memberId)
+                .claim("role", role) // Custom Claim으로 권한 정보 저장 (예: "USER", "ADMIN")
                 .issuedAt(now)
                 .expiration(expiration)
                 .signWith(secretKey)
@@ -69,13 +70,20 @@ public class JwtTokenProvider {
 
     // JWT에서 memberId 추출
     public String getMemberId(String token) {
+        return getClaims(token).getSubject();
+    }
 
-        Claims claims = Jwts.parser()
+    // 💡 2. JWT에서 role 추출하는 메서드 추가
+    public String getRole(String token) {
+        return getClaims(token).get("role", String.class);
+    }
+
+    // 💡 3. Claims 추출 중복 코드를 공통 메서드로 분리 (가독성 개선)
+    private Claims getClaims(String token) {
+        return Jwts.parser()
                 .verifyWith(secretKey)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
-
-        return claims.getSubject();
     }
 }

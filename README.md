@@ -53,7 +53,7 @@ CustomAuthenticationProvider
     ↓
 인증 성공
     ↓
-JWT 생성
+JWT 생성 (memberId + role)
     ↓
 클라이언트에게 JWT 전달
     ↓
@@ -61,7 +61,7 @@ JWT 생성
     ↓
 JwtAuthenticationFilter
     ↓
-JWT 검증
+JWT 검증 및 memberId, role 추출
     ↓
 인증된 사용자로 요청 처리
 ```
@@ -232,10 +232,10 @@ JWT를 생성하고 검증하는 역할을 담당한다.
 주요 역할:
 
 ```text
-JWT 생성
-JWT 유효성 검사
-JWT에서 사용자 식별 정보 추출
-JWT 만료 여부 확인
+JWT 생성 (memberId, role 클레임 포함)
+JWT 유효성 검사 (서명 위변조, 만료 여부 확인)
+JWT에서 memberId 및 role 추출
+Claims 추출 공통 메서드 관리
 ```
 
 로그인 인증이 성공하면 `JwtTokenProvider`를 통해 JWT를 생성한다.
@@ -244,9 +244,9 @@ JWT 만료 여부 확인
 
 ### `JwtAuthenticationFilter`
 
-로그인 이후 API 요청에서 JWT를 확인하는 역할을 담당한다.
+로그인 이후 API 요청에서 HTTP Authorization 헤더의 JWT를 검증하고 Spring Security 인증 정보로 등록하는 역할을 담당한다.
 
-클라이언트가 다음과 같이 요청한다고 가정한다.
+주요 동작 및 특징:
 
 ```http
 Authorization: Bearer {JWT}
@@ -257,15 +257,15 @@ Authorization: Bearer {JWT}
 ```text
 API 요청
     ↓
-Authorization Header 확인
+Authorization Header 확인 ("Bearer " 검사)
     ↓
-JWT 추출
+JWT 추출 및 유효성 검증
     ↓
-JWT 검증
+JWT에서 memberId, role 추출
     ↓
-유효한 JWT
+Spring Security 인증 객체 생성 (ROLE_ 접두사 부여 및 Details 설정)
     ↓
-Spring Security 인증 정보 등록
+SecurityContext에 저장
     ↓
 Controller 실행
 ```
@@ -303,6 +303,7 @@ JWT 전환이 완료되면 로그인 인증 구조는 다음과 같다.
 │ JwtTokenProvider     │
 │                      │
 │ JWT 생성              │
+│ (memberId + role)    │
 └──────────┬───────────┘
            │
            │ JWT
@@ -311,14 +312,15 @@ JWT 전환이 완료되면 로그인 인증 구조는 다음과 같다.
 │    React    │
 └──────┬──────┘
        │
-       │ API 요청 + JWT
+       │ API 요청 + JWT (Authorization: Bearer {token})
        ▼
 ┌──────────────────────┐
 │ JwtAuthentication    │
 │ Filter               │
 └──────────┬───────────┘
            │
-           │ JWT 검증
+           │ JWT 검증 &
+           │ memberId / role 추출
            ▼
 ┌──────────────────────┐
 │ Spring Security      │
@@ -357,8 +359,8 @@ JWT 전환이 완료되면 로그인 인증 구조는 다음과 같다.
 
 * [x] 기존 Session 기반 로그인 구조 분석
 * [x] JWT 의존성 추가  
-* [ ] `JwtTokenProvider` 구현
-* [ ] `JwtAuthenticationFilter` 구현
+* [x] `JwtTokenProvider` 구현
+* [x] `JwtAuthenticationFilter` 구현
 * [ ] `SecurityConfig` JWT 방식으로 변경
 * [ ] 로그인 API JWT 방식으로 변경
 * [ ] 로그인 실패 응답 변경
