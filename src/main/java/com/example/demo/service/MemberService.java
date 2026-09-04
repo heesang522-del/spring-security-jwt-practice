@@ -1,7 +1,6 @@
 package com.example.demo.service;
 
 import com.example.demo.dto.MemberDto;
-import com.example.demo.dto.MyActivityDto;
 import com.example.demo.repository.MemberRepository;
 import com.example.demo.security.CustomUserDetails;
 import com.example.demo.util.FileUtil;

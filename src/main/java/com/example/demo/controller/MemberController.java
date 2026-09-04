@@ -1,7 +1,6 @@
 package com.example.demo.controller;
 
 import com.example.demo.dto.MemberDto;
-import com.example.demo.dto.MyActivityDto;
 import com.example.demo.security.CustomUserDetails;
 import com.example.demo.service.AuthService;
 import com.example.demo.service.MemberService;

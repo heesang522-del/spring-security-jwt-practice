@@ -356,22 +356,20 @@ JWT 전환이 완료되면 로그인 인증 구조는 다음과 같다.
 ### 이번 작업
 
 * [x] 기존 Session 기반 로그인 구조 분석
-* [ ] JWT 의존성 추가
-* [ ] Dto 분리
+* [x] JWT 의존성 추가  
 * [ ] `JwtTokenProvider` 구현
 * [ ] `JwtAuthenticationFilter` 구현
 * [ ] `SecurityConfig` JWT 방식으로 변경
 * [ ] 로그인 API JWT 방식으로 변경
 * [ ] 로그인 실패 응답 변경
+* [ ] CustomLoginSuccessHandler 제거
 * [ ] 기존 Session / Remember-me 로그인 제거
 * [ ] JWT 로그인 테스트
+* [ ] JWT 로그아웃
 
 ### 이후 작업
 
-* [ ] 회원가입
-* [ ] 회원정보 조회
-* [ ] 회원정보 수정
-* [ ] 비밀번호 변경
-* [ ] JWT 로그아웃
 * [ ] Refresh Token
-* [ ] CORS 설정
+* [ ] 백엔드에도 회원가입, 회원 수정 시에 검증 기능 추가
+* [ ] Dto 분리
+* [ ] 필요없는 의존성 삭제
