@@ -20,23 +20,26 @@ public class JwtTokenProvider {
 
     private final SecretKey secretKey;
     private final long accessTokenExpiration;
+    private final long autoLoginTokenExpiration;
 
     public JwtTokenProvider(
             @Value("${jwt.secret}") String secret,
-            @Value("${jwt.access-token-expiration}") long accessTokenExpiration
+            @Value("${jwt.access-token-expiration}") long accessTokenExpiration,
+            @Value("${jwt.auto-login-token-expiration}") long autoLoginTokenExpiration
     ) {
         this.secretKey = Keys.hmacShaKeyFor(
                 secret.getBytes(StandardCharsets.UTF_8)
         );
         this.accessTokenExpiration = accessTokenExpiration;
+        this.autoLoginTokenExpiration = autoLoginTokenExpiration;
     }
 
-    // 💡 1. JWT 생성 (role 매개변수 추가 및 claim("role", role) 설정)
-    public String generateToken(String memberId, String role) {
+    // JWT 생성 (role claim과 자동 로그인 만료 시간을 반영)
+    public String generateToken(String memberId, String role, boolean rememberMe) {
 
         Date now = new Date();
         Date expiration = new Date(
-                now.getTime() + accessTokenExpiration
+                now.getTime() + (rememberMe ? autoLoginTokenExpiration : accessTokenExpiration)
         );
 
         return Jwts.builder()

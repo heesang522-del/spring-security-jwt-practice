@@ -1,5 +1,7 @@
 package com.example.demo.api;
 
+import com.example.demo.dto.LoginRequest;
+import com.example.demo.dto.LoginResponse;
 import com.example.demo.service.AuthService;
 import com.example.demo.service.EmailVerificationService;
 import com.example.demo.service.MemberService;
@@ -7,6 +9,7 @@ import com.example.demo.service.MemberService.AccountRestoreType;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,6 +25,16 @@ public class AuthApiController {
     private final AuthService authService; // 🎯 메인 비즈니스 로직
     private final MemberService memberService; // 계정 상태 복구용 (필요 시 유지)
     private final EmailVerificationService emailVerificationService;
+
+    @PostMapping("/login")
+    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
+        LoginResponse response = authService.login(
+                request.memberId(),
+                request.memberPassword(),
+                request.rememberMe()
+        );
+        return ResponseEntity.ok(response);
+    }
 
     /* ================= 아이디 / 비밀번호 찾기 API ================= */
 

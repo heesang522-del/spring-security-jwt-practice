@@ -1,15 +1,23 @@
 package com.example.demo.service;
 
 import com.example.demo.dto.AutoLoginDto;
+import com.example.demo.dto.LoginResponse;
 import com.example.demo.dto.MemberDto;
 import com.example.demo.repository.AutoLoginRepository;
 import com.example.demo.repository.MemberRepository;
+import com.example.demo.security.CustomAuthenticationProvider;
+import com.example.demo.security.CustomUserDetails;
+import com.example.demo.security.JwtTokenProvider;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.Date;
 import java.util.UUID;
@@ -23,6 +31,31 @@ public class AuthService {
     private final AutoLoginRepository autoLoginRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailVerificationService emailVerificationService;
+    private final CustomAuthenticationProvider customAuthenticationProvider;
+    private final JwtTokenProvider jwtTokenProvider;
+
+    @Transactional
+    public LoginResponse login(String memberId, String memberPassword, boolean rememberMe) {
+        if (!StringUtils.hasText(memberId) || !StringUtils.hasText(memberPassword)) {
+            throw new BadCredentialsException("아이디와 비밀번호를 입력해 주세요.");
+        }
+
+        Authentication authentication = customAuthenticationProvider.authenticate(
+                UsernamePasswordAuthenticationToken.unauthenticated(memberId, memberPassword)
+        );
+        CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+        MemberDto memberDto = userDetails.getMemberDto();
+        String role = memberDto.getMemberRole();
+
+        memberRepository.updateLastLoginAt(memberDto.getMemberId());
+
+        return new LoginResponse(
+                jwtTokenProvider.generateToken(memberDto.getMemberId(), role, rememberMe),
+                "Bearer",
+                memberDto.getMemberId(),
+                role
+        );
+    }
 
     /* ================= 아이디 / 비밀번호 찾기 ================= */
 

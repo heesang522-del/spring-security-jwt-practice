@@ -1,5 +1,4 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
-<%@ taglib prefix="c" uri="jakarta.tags.core" %>
 <!doctype html>
 <html lang="ko">
 <head>
@@ -33,7 +32,7 @@
                 <p class="auth-description">계정에 로그인하고 오늘의 음악 이야기를 이어가세요.</p>
             </div>
 
-            <form id="loginForm" class="auth-form" action="${pageContext.request.contextPath}/auth/login" method="post">
+            <form id="loginForm" class="auth-form">
                 <div class="input-group">
                     <label for="memberId">아이디</label>
                     <input type="text" id="memberId" name="memberId" value="${savedMemberId}" required autocomplete="username" placeholder="아이디를 입력하세요">
@@ -44,12 +43,9 @@
                 </div>
 
                 <div id="loginErrorMsg" class="error-msg" aria-live="polite"></div>
-                <c:if test="${param.error == 'true'}">
-                    <div class="error-msg show" role="alert"><c:out value="${param.exception}"/></div>
-                </c:if>
 
                 <div class="checkbox-group">
-                    <input type="checkbox" id="remember-me" name="remember-me" value="true">
+                    <input type="checkbox" id="remember-me" name="remember-me">
                     <label for="remember-me">자동 로그인 유지</label>
                 </div>
                 <button type="submit" class="btn-submit">로그인</button>
@@ -66,22 +62,54 @@
     </main>
 </div>
 
-    <script>
+<script>
     document.addEventListener('DOMContentLoaded', function() {
-        // URL의 쿼리 파라미터 읽기
-        const urlParams = new URLSearchParams(window.location.search);
+        const loginForm = document.getElementById('loginForm');
+        const loginErrorMsg = document.getElementById('loginErrorMsg');
+        const contextPath = '${pageContext.request.contextPath}';
 
-        // 다른 곳에서 로그인하여 세션이 만료된 경우 (기존 유저만 해당)
+        loginForm.addEventListener('submit', async function(event) {
+            event.preventDefault();
+            loginErrorMsg.textContent = '';
+            loginErrorMsg.classList.remove('show');
+
+            try {
+                const response = await fetch(`${contextPath}/api/auth/login`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        memberId: document.getElementById('memberId').value,
+                        memberPassword: document.getElementById('memberPassword').value,
+                        rememberMe: document.getElementById('remember-me').checked
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.message || '로그인에 실패했습니다.');
+                }
+
+                // 기존 토큰 삭제 후 설정
+                sessionStorage.removeItem('accessToken');
+                localStorage.removeItem('accessToken');
+
+                const tokenStorage = document.getElementById('remember-me').checked
+                    ? localStorage
+                    : sessionStorage;
+                tokenStorage.setItem('accessToken', result.accessToken);
+
+                window.location.href = `${contextPath}/`;
+            } catch (error) {
+                loginErrorMsg.textContent = error.message;
+                loginErrorMsg.classList.add('show');
+            }
+        });
+
+        // 세션 만료 알림 처리
+        const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.has('expired')) {
             alert('다른 기기나 브라우저에서 로그인하여 접속이 종료되었습니다.');
-
-            // alert 확인 후 주소창의 ?expired=true 파라미터 깔끔하게 제거
-            history.replaceState(null, null, window.location.pathname);
-        }
-
-        // 2. 로그인 실패 / 차단 관련 알림 팝업 (추가)
-        if (urlParams.has('error')) {
-            // 새로고침 시 에러 메시지가 다시 렌더링되거나 중복 처리되는 것을 방지하기 위해 URL만 깔끔하게 뒤로 넘김
             history.replaceState(null, null, window.location.pathname);
         }
     });
