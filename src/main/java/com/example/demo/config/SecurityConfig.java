@@ -1,9 +1,11 @@
 package com.example.demo.config;
 
-import com.example.demo.repository.AutoLoginRepository;
 import com.example.demo.security.AutoLoginFilter;
 import com.example.demo.security.CustomAuthenticationProvider;
+import com.example.demo.security.CustomLoginFailureHandler;
 import com.example.demo.security.CustomLoginSuccessHandler;
+import com.example.demo.security.JwtTokenProvider;
+import com.example.demo.security.RefreshTokenRedisService;
 import jakarta.servlet.http.Cookie;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -20,10 +22,13 @@ import org.springframework.security.web.session.HttpSessionEventPublisher;
 public class SecurityConfig {
 
     private final CustomLoginSuccessHandler customLoginSuccessHandler;
-    private final com.example.demo.security.CustomLoginFailureHandler customLoginFailureHandler;
+    private final CustomLoginFailureHandler customLoginFailureHandler;
     private final AutoLoginFilter autoLoginFilter;
-    private final AutoLoginRepository autoLoginRepository;
     private final CustomAuthenticationProvider customAuthenticationProvider;
+
+    // 💡 Redis 서비스 및 JWT 토큰 프로바이더 주입
+    private final RefreshTokenRedisService redisService;
+    private final JwtTokenProvider jwtTokenProvider;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -31,7 +36,6 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.disable())
-                // .authenticationProvider(customAuthenticationProvider)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/css/**", "/js/**", "/images/**", "/uploads/**", "/error"
@@ -62,15 +66,24 @@ public class SecurityConfig {
                         .logoutSuccessUrl("/")
                         .invalidateHttpSession(true)
                         .clearAuthentication(true)
-                        .deleteCookies("JSESSIONID", "remember-me")
+                        // 💡 쿠키 삭제 대상 지정
+                        .deleteCookies("JSESSIONID", "refreshToken")
                         .addLogoutHandler((request, response, authentication) -> {
                             Cookie[] cookies = request.getCookies();
                             if (cookies != null) {
                                 for (Cookie cookie : cookies) {
-                                    if ("remember-me".equals(cookie.getName())) {
-                                        autoLoginRepository.deleteByToken(cookie.getValue());
+                                    // 💡 refreshToken 쿠키 확인 후 Redis 토큰 삭제
+                                    if ("refreshToken".equals(cookie.getName())) {
+                                        String token = cookie.getValue();
 
-                                        Cookie deleteCookie = new Cookie("remember-me", null);
+                                        if (jwtTokenProvider.validateToken(token)) {
+                                            String memberId = jwtTokenProvider.getMemberId(token);
+                                            // Redis에 저장된 Refresh Token 삭제
+                                            redisService.deleteRefreshToken(memberId);
+                                        }
+
+                                        // 브라우저 쿠키 삭제
+                                        Cookie deleteCookie = new Cookie("refreshToken", null);
                                         deleteCookie.setPath("/");
                                         deleteCookie.setMaxAge(0);
                                         response.addCookie(deleteCookie);
@@ -92,7 +105,6 @@ public class SecurityConfig {
         return http.build();
     }
 
-    // 기존의 config.getAuthenticationManager() 대신 ProviderManager를 직접 생성하여 1개만 지정
     @Bean
     public AuthenticationManager authenticationManager() {
         return new ProviderManager(customAuthenticationProvider);
