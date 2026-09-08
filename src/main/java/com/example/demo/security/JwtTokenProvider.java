@@ -47,12 +47,13 @@ public class JwtTokenProvider {
     }
 
     // 💡 자동로그인 전용 Refresh Token 생성
-    public String generateRefreshToken(String memberId) {
+    public String generateRefreshToken(String memberId, String role) {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + refreshTokenExpiration);
 
         return Jwts.builder()
                 .subject(memberId)
+                .claim("role", role)
                 .issuedAt(now)
                 .expiration(expiration)
                 .signWith(secretKey)

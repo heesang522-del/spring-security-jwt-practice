@@ -38,6 +38,7 @@
             member_phone    AS memberPhone,
             member_email    AS memberEmail,
             profile_image   AS profileImage,
+            member_role     AS memberRole,
             member_status   AS memberStatus,
             created_at      AS createdAt,
             updated_at      AS updatedAt,

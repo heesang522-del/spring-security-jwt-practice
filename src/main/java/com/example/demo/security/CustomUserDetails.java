@@ -3,6 +3,7 @@ package com.example.demo.security;
 import com.example.demo.dto.MemberDto;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
@@ -22,8 +23,18 @@ public class CustomUserDetails implements UserDetails {
 
     // 회원 권한 반환
     @Override
-    public Collection<? extends SimpleGrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_USER"));
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        String role = memberDto.getMemberRole();
+        if (role == null) {
+            return List.of(); // 또는 기본 권한 부여
+        }
+
+        // "ROLE_" 접두사 자동 처리
+        if (!role.startsWith("ROLE_")) {
+            role = "ROLE_" + role;
+        }
+
+        return List.of(new SimpleGrantedAuthority(role));
     }
 
     @Override

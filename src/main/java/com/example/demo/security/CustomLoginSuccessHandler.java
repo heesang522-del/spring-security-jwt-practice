@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 
@@ -33,6 +34,10 @@ public class CustomLoginSuccessHandler
                 (CustomUserDetails) authentication.getPrincipal();
 
         String memberId = user.getUsername();
+        String role = user.getAuthorities().stream()
+                .findFirst()
+                .map(GrantedAuthority::getAuthority) // "ROLE_USER"
+                .orElse("");
 
         // 2. 마지막 로그인 시간 갱신
         memberService.updateLastLoginAt(memberId);
@@ -41,7 +46,7 @@ public class CustomLoginSuccessHandler
         String rememberMe = request.getParameter("remember-me");
         if ("on".equals(rememberMe) || "true".equals(rememberMe)) {
             // 1) Refresh Token 생성
-            String refreshToken = jwtTokenProvider.generateRefreshToken(memberId);
+            String refreshToken = jwtTokenProvider.generateRefreshToken(memberId, role);
             // 2) Redis 메모리에 저장 (Key: "RT:memberId", Value: refreshToken, TTL: 14일)
             redisService.saveRefreshToken(memberId, refreshToken, jwtTokenProvider.getRefreshTokenExpiration());
             // 3) HttpOnly 쿠키 생성 후 응답(response)에 추가
