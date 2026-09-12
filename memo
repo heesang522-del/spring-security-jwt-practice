@@ -1,0 +1,23 @@
+1. JwtAuthenticationFilter의 response 필요한지 의문
+2. @Slf4j 어노테이션 붙은 값들 다 제거하기
+3. authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request)); 쓸 일 없으면 버리기
+
+이제 해야할 것.
+1. jwt 리프레시 토큰 확인하기
+2. 익스파이어드 했을 때 잘 작동하는지 확인하기
+3. 암복호화가 잘 되는지 확인
+4. 롤 값 받는지 확인하기.
+
+다음으로
+1. JSESSIONID 쿠키 삭제하기
+2. 리프레시토큰이 잘 작동하는지 볼 것 (시간 줄여서 확인할 것)
+
+확장
+1. 토큰 보안 강화 (Refresh Token Rotation - RTR)
+
+2. Access Token 도입 (완벽한 Dual-Token 구조로 확장)
+
+
+커스텀로그인핸들러 (X)
+쿠키는 브라우저에서 나가면 사라짐
+안사라지게 하는 방법이 있나?

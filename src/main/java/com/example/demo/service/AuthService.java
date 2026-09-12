@@ -3,7 +3,6 @@ package com.example.demo.service;
 import com.example.demo.dto.AutoLoginDto;
 import com.example.demo.dto.LoginResponse;
 import com.example.demo.dto.MemberDto;
-import com.example.demo.repository.AutoLoginRepository;
 import com.example.demo.repository.MemberRepository;
 import com.example.demo.security.CustomAuthenticationProvider;
 import com.example.demo.security.CustomUserDetails;
@@ -28,7 +27,6 @@ import java.util.UUID;
 public class AuthService {
 
     private final MemberRepository memberRepository;
-    private final AutoLoginRepository autoLoginRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailVerificationService emailVerificationService;
     private final CustomAuthenticationProvider customAuthenticationProvider;
@@ -96,34 +94,6 @@ public class AuthService {
         memberRepository.updatePassword(memberId, encodedPassword);
 
         emailVerificationService.removeVerification(memberEmail);
-    }
-
-
-    /* ================= 자동 로그인 토큰 관리 ================= */
-
-    @Transactional
-    public void setupAutoLogin(String memberId, HttpServletResponse response) {
-        String token = UUID.randomUUID().toString();
-        int amount = 60 * 60 * 24 * 7;
-        Date limitDate = new Date(System.currentTimeMillis() + ((long) amount * 1000));
-
-        AutoLoginDto autoLoginDto = new AutoLoginDto();
-        autoLoginDto.setMemberId(memberId);
-        autoLoginDto.setToken(token);
-        autoLoginDto.setLimitDate(limitDate);
-
-        autoLoginRepository.upsertToken(autoLoginDto);
-
-        Cookie cookie = new Cookie("remember-me", token);
-        cookie.setPath("/");
-        cookie.setMaxAge(amount);
-        cookie.setHttpOnly(true);
-        response.addCookie(cookie);
-    }
-
-    @Transactional
-    public void removeAutoLoginToken(String token) {
-        autoLoginRepository.deleteByToken(token);
     }
 
     private void validateEmailVerification(String email) {

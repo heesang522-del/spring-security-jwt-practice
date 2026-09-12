@@ -33,6 +33,10 @@ spring:
           timeout: 5000
           starttls:
             enable: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost} # 실제 Redis 서버 IP로 지정
+      port: ${REDIS_PORT:6379}
 
 mybatis:
   mapper-locations: classpath:repository/**/*.xml
@@ -45,5 +49,5 @@ custom:
 
 jwt:
   secret: my-temporary-secret-key-for-jwt-authentication-demo-project-2026-safe
-  access-token-expiration: 1800000 # 30분 (30 * 60 * 1000ms)
-  auto-login-token-expiration: 604800000 # 7일 (7 * 24 * 60 * 60 * 1000ms)
+  access-token-expiration: 1800000 # 30분
+  refresh-token-expiration: 1209600000 # 14일 (14 * 24 * 60 * 60 * 1000ms)

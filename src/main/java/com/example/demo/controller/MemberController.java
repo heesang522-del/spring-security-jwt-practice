@@ -2,7 +2,7 @@ package com.example.demo.controller;
 
 import com.example.demo.dto.MemberDto;
 import com.example.demo.security.CustomUserDetails;
-import com.example.demo.service.AuthService;
+import com.example.demo.security.RefreshTokenRedisService;
 import com.example.demo.service.MemberService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,7 +23,6 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.security.Principal;
-import java.util.List;
 
 
 @Controller
@@ -32,7 +31,7 @@ import java.util.List;
 public class MemberController {
 
     private final MemberService memberService;
-    private final AuthService authService;
+    private final RefreshTokenRedisService redisService;
 
     /* ================= 1. 페이지 이동 (GET) ================= */
 
@@ -143,19 +142,24 @@ public class MemberController {
         try {
             memberService.deleteMember(memberId);
 
+            // 1. Redis에서 Refresh Token 삭제 (memberId 기반)
+            redisService.deleteRefreshToken(memberId);
+
+            // 2. 브라우저의 refreshToken 쿠키 만료 처리
             Cookie[] cookies = request.getCookies();
             if (cookies != null) {
                 for (Cookie cookie : cookies) {
-                    if ("remember-me".equals(cookie.getName())) {
-                        authService.removeAutoLoginToken(cookie.getValue());
-                        cookie.setPath("/");
-                        cookie.setMaxAge(0);
-                        response.addCookie(cookie);
+                    if ("refreshToken".equals(cookie.getName())) {
+                        Cookie deleteCookie = new Cookie("refreshToken", null);
+                        deleteCookie.setPath("/");
+                        deleteCookie.setMaxAge(0);
+                        response.addCookie(deleteCookie);
                         break;
                     }
                 }
             }
 
+            // 3. 세션 및 시큐리티 권한 로그아웃 처리
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
             if (authentication != null) {
                 new SecurityContextLogoutHandler().logout(request, response, authentication);

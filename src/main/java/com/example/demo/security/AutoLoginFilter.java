@@ -1,7 +1,6 @@
 package com.example.demo.security;
 
 import com.example.demo.dto.MemberDto;
-import com.example.demo.repository.AutoLoginRepository;
 import com.example.demo.service.MemberService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -25,7 +24,8 @@ import java.io.IOException;
 @RequiredArgsConstructor
 public class AutoLoginFilter extends OncePerRequestFilter {
 
-    private final AutoLoginRepository autoLoginRepository;
+    private final JwtTokenProvider jwtTokenProvider;
+    private final RefreshTokenRedisService redisService;
     private final MemberService memberService;
 
     // 세션에 SecurityContext를 바인딩해주는 객체
@@ -42,10 +42,11 @@ public class AutoLoginFilter extends OncePerRequestFilter {
         Authentication authentication =
                 SecurityContextHolder.getContext().getAuthentication();
 
+        // 이미 인증된 사용자는 그대로 필터 통과
         if (authentication != null
                 && authentication.isAuthenticated()
                 && !(authentication instanceof AnonymousAuthenticationToken)) {
-            filterChain.doFilter(request, response); // 이미 인증된 사용자는 그대로 통과
+            filterChain.doFilter(request, response);
             return;
         }
 
@@ -53,49 +54,64 @@ public class AutoLoginFilter extends OncePerRequestFilter {
 
         if (cookies != null) {
             for (Cookie cookie : cookies) {
-                if ("remember-me".equals(cookie.getName())) {
+                // 1. refreshToken 쿠키 탐색
+                if ("refreshToken".equals(cookie.getName())) {
 
                     String token = cookie.getValue();
-                    String memberId = autoLoginRepository.findMemberIdByToken(token);
 
-                    if (memberId != null) {
-                        MemberDto memberDto = memberService.getMemberById(memberId);
+                    // 2. JWT 서명 및 유효기간 검증
+                    if (jwtTokenProvider.validateToken(token)) {
+                        String memberId = jwtTokenProvider.getMemberId(token);
 
-                        if (memberDto != null) {
-                            CustomUserDetails userDetails = new CustomUserDetails(memberDto);
+                        // 3. Redis에 저장된 토큰과 일치하는지 비교 (탈취/중복 로그인 검증)
+                        String savedToken = redisService.getRefreshToken(memberId);
 
-                            UsernamePasswordAuthenticationToken auth =
-                                    new UsernamePasswordAuthenticationToken(
-                                            userDetails,
-                                            null,
-                                            userDetails.getAuthorities());
+                        if (savedToken != null && savedToken.equals(token)) {
+                            MemberDto memberDto = memberService.getMemberById(memberId);
 
-                            // Context 생성 및 저장
-                            SecurityContext context = SecurityContextHolder.createEmptyContext();
-                            context.setAuthentication(auth);
-                            SecurityContextHolder.setContext(context);
+                            if (memberDto != null) {
+                                CustomUserDetails userDetails = new CustomUserDetails(memberDto);
 
-                            // 1. 세션 가져오기 및 Context 저장
-                            HttpSession session = request.getSession(true);
-                            securityContextRepository.saveContext(context, request, response);
+                                UsernamePasswordAuthenticationToken auth =
+                                        new UsernamePasswordAuthenticationToken(
+                                                userDetails,
+                                                null,
+                                                userDetails.getAuthorities());
 
-                            // 2. 세션에 nickname과 profile 추가 저장
-                            session.setAttribute("nickname", memberDto.getNickname());
-                            session.setAttribute("profile", memberDto.getProfileImage());
+                                // Context 생성 및 저장
+                                SecurityContext context = SecurityContextHolder.createEmptyContext();
+                                context.setAuthentication(auth);
+                                SecurityContextHolder.setContext(context);
+
+                                // 세션 가져오기 및 Context 저장
+                                HttpSession session = request.getSession(true);
+                                securityContextRepository.saveContext(context, request, response);
+
+                                // 세션에 닉네임 및 프로필 저장
+                                session.setAttribute("nickname", memberDto.getNickname());
+                                session.setAttribute("profile", memberDto.getProfileImage());
+                            }
+                        } else {
+                            // Redis에 값이 없거나 다른 경우 만료 처리
+                            clearInvalidCookie(response);
                         }
                     } else {
-                        // DB에 없는 만료/잘못된 토큰이면 쿠키 지워주기
-                        Cookie invalidCookie = new Cookie("remember-me", null);
-                        invalidCookie.setMaxAge(0);
-                        invalidCookie.setPath("/");
-                        response.addCookie(invalidCookie);
+                        // JWT 검증 실패 시 만료 처리
+                        clearInvalidCookie(response);
                     }
                     break;
                 }
             }
         }
 
-        // 필터 체인 진행 (메서드 최하단에 위치)
         filterChain.doFilter(request, response);
+    }
+
+    // 만료되었거나 유효하지 않은 쿠키 삭제 전용 메서드
+    private void clearInvalidCookie(HttpServletResponse response) {
+        Cookie invalidCookie = new Cookie("refreshToken", null);
+        invalidCookie.setMaxAge(0);
+        invalidCookie.setPath("/");
+        response.addCookie(invalidCookie);
     }
 }
