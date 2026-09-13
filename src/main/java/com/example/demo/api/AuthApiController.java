@@ -1,14 +1,18 @@
 package com.example.demo.api;
 
 import com.example.demo.dto.LoginRequest;
-import com.example.demo.dto.LoginResponse;
-import com.example.demo.service.AuthService;
+import com.example.demo.security.CustomLoginFailureHandler;
+import com.example.demo.security.CustomLoginSuccessHandler;
 import com.example.demo.service.EmailVerificationService;
 import com.example.demo.service.MemberService;
 import com.example.demo.service.MemberService.AccountRestoreType;
-import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -22,59 +26,33 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AuthApiController {
 
-    private final AuthService authService; // 🎯 메인 비즈니스 로직
-    private final MemberService memberService; // 계정 상태 복구용 (필요 시 유지)
+    private final AuthenticationManager authenticationManager;
+    private final CustomLoginSuccessHandler customLoginSuccessHandler;
+    private final CustomLoginFailureHandler customLoginFailureHandler;
+    private final MemberService memberService;
     private final EmailVerificationService emailVerificationService;
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
-        LoginResponse response = authService.login(
-                request.memberId(),
-                request.memberPassword(),
-                request.rememberMe()
-        );
-        return ResponseEntity.ok(response);
-    }
+    public void login(
+            @RequestBody LoginRequest requestDto,
+            HttpServletRequest request,
+            HttpServletResponse response) throws Exception {
 
-    /* ================= 아이디 / 비밀번호 찾기 API ================= */
-
-    @PostMapping("/find-id/send-code")
-    public ResponseEntity<?> sendCodeForFindId(@RequestBody Map<String, String> request) {
         try {
-            authService.sendCodeForFindId(request.get("memberName"), request.get("memberEmail"));
-            return ResponseEntity.ok(Map.of("success", true, "message", "인증번호가 발송되었습니다."));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", e.getMessage()));
-        }
-    }
+            // 1. CustomAuthenticationProvider를 통한 인증 시도
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            requestDto.memberId(),
+                            requestDto.memberPassword()
+                    )
+            );
 
-    @PostMapping("/find-id")
-    public ResponseEntity<?> findId(@RequestBody Map<String, String> request) {
-        try {
-            String memberId = authService.findMemberId(request.get("memberName"), request.get("memberEmail"));
-            return ResponseEntity.ok(Map.of("success", true, "memberId", memberId));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", e.getMessage()));
-        }
-    }
+            // 2. 인증 성공 시 커스텀 성공 핸들러 실행
+            customLoginSuccessHandler.onAuthenticationSuccess(request, response, authentication);
 
-    @PostMapping("/find-pw/send-code")
-    public ResponseEntity<?> sendCodeForFindPw(@RequestBody Map<String, String> request) {
-        try {
-            authService.sendCodeForFindPw(request.get("memberId"), request.get("memberEmail"));
-            return ResponseEntity.ok(Map.of("success", true, "message", "인증번호가 발송되었습니다."));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", e.getMessage()));
-        }
-    }
-
-    @PostMapping("/reset-pw")
-    public ResponseEntity<?> resetPassword(@RequestBody Map<String, String> request) {
-        try {
-            authService.resetPassword(request.get("memberId"), request.get("memberEmail"), request.get("newPassword"));
-            return ResponseEntity.ok(Map.of("success", true, "message", "비밀번호가 성공적으로 변경되었습니다."));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", e.getMessage()));
+        } catch (AuthenticationException exception) {
+            // 3. 예외(휴면/잠금/정지/비밀번호 오류 등) 발생 시 커스텀 실패 핸들러 실행
+            customLoginFailureHandler.onAuthenticationFailure(request, response, exception);
         }
     }
 
@@ -92,25 +70,22 @@ public class AuthApiController {
     }
 
     @PostMapping("/unlock-dormant")
-    public ResponseEntity<String> unlockDormant(@RequestBody Map<String, String> request, HttpSession session) {
-        return processAccountRestore(request, session, "unlockMemberId", "unlockMemberEmail", AccountRestoreType.DORMANT);
+    public ResponseEntity<String> unlockDormant(@RequestBody Map<String, String> request) {
+        return processAccountRestore(request, AccountRestoreType.DORMANT);
     }
 
     @PostMapping("/restore-account")
-    public ResponseEntity<String> restoreAccount(@RequestBody Map<String, String> request, HttpSession session) {
-        return processAccountRestore(request, session, "restoreMemberId", "restoreMemberEmail", AccountRestoreType.DELETE);
+    public ResponseEntity<String> restoreAccount(@RequestBody Map<String, String> request) {
+        return processAccountRestore(request, AccountRestoreType.DELETE);
     }
 
     private ResponseEntity<String> processAccountRestore(
             Map<String, String> request,
-            HttpSession session,
-            String sessionKeyId,
-            String sessionKeyEmail,
             AccountRestoreType restoreType
     ) {
         String code = request.get("code");
-        String memberId = (String) session.getAttribute(sessionKeyId);
-        String memberEmail = (String) session.getAttribute(sessionKeyEmail);
+        String memberId = request.get("memberId");
+        String memberEmail = request.get("memberEmail");
 
         if (memberId == null || memberEmail == null) {
             return ResponseEntity.ok("EXPIRED");
@@ -120,8 +95,6 @@ public class AuthApiController {
             boolean isCodeValid = emailVerificationService.verifyCode(memberEmail, code);
             if (isCodeValid) {
                 memberService.restoreAccountStatus(memberId, memberEmail, restoreType);
-                session.removeAttribute(sessionKeyId);
-                session.removeAttribute(sessionKeyEmail);
                 return ResponseEntity.ok("SUCCESS");
             }
             return ResponseEntity.ok("FAIL");

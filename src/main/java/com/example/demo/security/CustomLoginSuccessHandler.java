@@ -5,19 +5,17 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 
 @Component
 @RequiredArgsConstructor
-public class CustomLoginSuccessHandler
-        extends SavedRequestAwareAuthenticationSuccessHandler {
+public class CustomLoginSuccessHandler implements AuthenticationSuccessHandler {
 
     private final MemberService memberService;
     private final JwtTokenProvider jwtTokenProvider;
@@ -30,19 +28,21 @@ public class CustomLoginSuccessHandler
             Authentication authentication)
             throws IOException, ServletException {
 
-        CustomUserDetails user =
-                (CustomUserDetails) authentication.getPrincipal();
-
+        CustomUserDetails user = (CustomUserDetails) authentication.getPrincipal();
         String memberId = user.getUsername();
         String role = user.getAuthorities().stream()
                 .findFirst()
-                .map(GrantedAuthority::getAuthority) // "ROLE_USER"
-                .orElse("");
+                .map(GrantedAuthority::getAuthority)
+                .orElse("ROLE_USER");
 
-        // 2. 마지막 로그인 시간 갱신
+        // 1. 마지막 로그인 시간 갱신
         memberService.updateLastLoginAt(memberId);
 
-        // 3. 자동로그인 체크박스 확인 ("on" 또는 "true")
+        // 2. Access Token 생성 및 Response Header 세팅
+        String accessToken = jwtTokenProvider.generateAccessToken(memberId, role);
+        response.setHeader("Authorization", "Bearer " + accessToken);
+
+        // 3. 자동로그인 체크박스 확인
         String rememberMe = request.getParameter("remember-me");
         if ("on".equals(rememberMe) || "true".equals(rememberMe)) {
             // 1) Refresh Token 생성
@@ -57,14 +57,9 @@ public class CustomLoginSuccessHandler
             response.addCookie(cookie);
         }
 
-        // 4. 기본 이동할 URL 설정
-        setDefaultTargetUrl("/");
-
-        // 5. 유저 기본 정보
-        HttpSession session = request.getSession();
-        session.setAttribute("nickname", user.getMemberDto().getNickname());
-        session.setAttribute("profile", user.getMemberDto().getProfileImage());
-
-        super.onAuthenticationSuccess(request, response, authentication);
+        // 4. JSON 성공 응답 전송 (세션 사용 X)
+        response.setStatus(HttpServletResponse.SC_OK);
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().write("{\"success\": true, \"message\": \"로그인 성공\"}");
     }
 }

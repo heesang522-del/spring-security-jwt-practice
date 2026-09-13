@@ -3,7 +3,6 @@ package com.example.demo.controller;
 import com.example.demo.repository.MemberSecurityRepository;
 import com.example.demo.security.LoginAttemptService;
 import com.example.demo.security.LoginUnlockTokenService;
-import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -66,9 +65,10 @@ public class AuthController {
 
     // 휴면 계정 해제 페이지
     @GetMapping("/unlock-dormant")
-    public String unlockDormantPage(HttpSession session, Model model) {
-        String memberId = (String) session.getAttribute("unlockMemberId");
-        String memberEmail = (String) session.getAttribute("unlockMemberEmail");
+    public String unlockDormantPage(
+            @RequestParam(value = "memberId", required = false) String memberId,
+            @RequestParam(value = "memberEmail", required = false) String memberEmail,
+            Model model) {
 
         if (memberId == null || memberEmail == null) {
             return "redirect:/auth/login";
@@ -81,9 +81,10 @@ public class AuthController {
 
     // 탈퇴 취소/복구 페이지
     @GetMapping("/restore-account")
-    public String restoreAccountPage(HttpSession session, Model model) {
-        String memberId = (String) session.getAttribute("restoreMemberId");
-        String memberEmail = (String) session.getAttribute("restoreMemberEmail");
+    public String restoreAccountPage(
+            @RequestParam(value = "memberId", required = false) String memberId,
+            @RequestParam(value = "memberEmail", required = false) String memberEmail,
+            Model model) {
 
         if (memberId == null || memberEmail == null) {
             return "redirect:/auth/login";

@@ -36,12 +36,12 @@
                     <!-- 1. 로그인 상태인 경우 -->
                     <sec:authorize access="isAuthenticated()">
                         <span class="welcome-msg">
-                            <strong>${sessionScope.nickname}</strong>님 환영합니다!
+                            <sec:authentication property="principal.memberDto.nickname" var="userNickname"/>
+                            <strong>${userNickname}</strong>님 환영합니다!
                         </span>
-                        <!-- 스프링 시큐리티 로그아웃 (CSRF 설정에 따라 POST 요청 권장) -->
+
+                        <!-- 스프링 시큐리티 로그아웃 -->
                         <form action="${ctx}/member/logout" method="post" style="display:inline;">
-                            <!-- Spring Security CSRF 토큰 (CSRF 사용 시 필요) -->
-                            <input type="hidden" name="${_csrf.parameterName}" value="${_csrf.token}" />
                             <button type="submit" class="auth-btn logout-btn">로그아웃</button>
                         </form>
                     </sec:authorize>

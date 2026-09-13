@@ -46,7 +46,7 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    // 💡 자동로그인 전용 Refresh Token 생성
+    // Refresh Token 생성
     public String generateRefreshToken(String memberId, String role) {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + refreshTokenExpiration);

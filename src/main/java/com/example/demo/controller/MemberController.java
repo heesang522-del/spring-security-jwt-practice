@@ -7,7 +7,6 @@ import com.example.demo.service.MemberService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -71,11 +70,9 @@ public class MemberController {
     }
 
     @PostMapping("/updateNickname")
-    public String updateNickname(String nickname, HttpSession session, Principal principal) {
-        // DB 업데이트
+    public String updateNickname(String nickname, Principal principal) {
+        // DB 업데이트만 수행 (세션 저장 로직 전면 제거)
         memberService.updateNickname(principal.getName(), nickname);
-        // 바로 세션 값 저장
-        session.setAttribute("nickname", nickname);
         return "redirect:/member/settings";
     }
 
@@ -142,7 +139,7 @@ public class MemberController {
         try {
             memberService.deleteMember(memberId);
 
-            // 1. Redis에서 Refresh Token 삭제 (memberId 기반)
+            // 1. Redis에서 Refresh Token 삭제
             redisService.deleteRefreshToken(memberId);
 
             // 2. 브라우저의 refreshToken 쿠키 만료 처리
@@ -159,11 +156,8 @@ public class MemberController {
                 }
             }
 
-            // 3. 세션 및 시큐리티 권한 로그아웃 처리
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (authentication != null) {
-                new SecurityContextLogoutHandler().logout(request, response, authentication);
-            }
+            // 3. 메모리 상의 SecurityContext 인증 정보만 초기화 (세션 로그아웃 핸들러 대체)
+            SecurityContextHolder.clearContext();
 
             rttr.addFlashAttribute("successMessage", "계정 삭제 신청이 완료되었습니다.");
             return "redirect:/";

@@ -1,4 +1,4 @@
-<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" session="false"%>
 <!doctype html>
 <html lang="ko">
 <head>
@@ -91,7 +91,6 @@
                 }
 
                 // 기존 토큰 삭제 후 설정
-                sessionStorage.removeItem('accessToken');
                 localStorage.removeItem('accessToken');
 
                 const tokenStorage = document.getElementById('remember-me').checked

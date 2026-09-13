@@ -1,14 +1,11 @@
 package com.example.demo.service;
 
-import com.example.demo.dto.AutoLoginDto;
 import com.example.demo.dto.LoginResponse;
 import com.example.demo.dto.MemberDto;
 import com.example.demo.repository.MemberRepository;
 import com.example.demo.security.CustomAuthenticationProvider;
 import com.example.demo.security.CustomUserDetails;
 import com.example.demo.security.JwtTokenProvider;
-import jakarta.servlet.http.Cookie;
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -17,9 +14,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
-
-import java.util.Date;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -47,8 +41,13 @@ public class AuthService {
 
         memberRepository.updateLastLoginAt(memberDto.getMemberId());
 
+        // Access Token과 Refresh Token 각각 생성
+        String accessToken = jwtTokenProvider.generateAccessToken(memberDto.getMemberId(), role);
+        String refreshToken = jwtTokenProvider.generateRefreshToken(memberDto.getMemberId(), role);
+
         return new LoginResponse(
-                jwtTokenProvider.generateToken(memberDto.getMemberId(), role, rememberMe),
+                accessToken,
+                refreshToken,
                 "Bearer",
                 memberDto.getMemberId(),
                 role
