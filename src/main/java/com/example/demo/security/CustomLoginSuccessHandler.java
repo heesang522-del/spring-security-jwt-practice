@@ -42,16 +42,17 @@ public class CustomLoginSuccessHandler implements AuthenticationSuccessHandler {
         String accessToken = jwtTokenProvider.generateAccessToken(memberId, role);
         response.setHeader("Authorization", "Bearer " + accessToken);
 
-        // 3. 자동로그인 체크박스 확인
-        String rememberMe = request.getParameter("remember-me");
-        if ("on".equals(rememberMe) || "true".equals(rememberMe)) {
+        // 3. 자동로그인 체크박스 확인 (수정 부분)
+        Boolean rememberMe = (Boolean) request.getAttribute("rememberMe");
+
+        if (Boolean.TRUE.equals(rememberMe)) {
             // 1) Refresh Token 생성
             String refreshToken = jwtTokenProvider.generateRefreshToken(memberId, role);
-            // 2) Redis 메모리에 저장 (Key: "RT:memberId", Value: refreshToken, TTL: 14일)
+            // 2) Redis 메모리에 저장
             redisService.saveRefreshToken(memberId, refreshToken, jwtTokenProvider.getRefreshTokenExpiration());
             // 3) HttpOnly 쿠키 생성 후 응답(response)에 추가
             Cookie cookie = new Cookie("refreshToken", refreshToken);
-            cookie.setHttpOnly(true); // JavaScript 접근 불가 (XSS 방어)
+            cookie.setHttpOnly(true);
             cookie.setPath("/");
             cookie.setMaxAge((int) (jwtTokenProvider.getRefreshTokenExpiration() / 1000));
             response.addCookie(cookie);

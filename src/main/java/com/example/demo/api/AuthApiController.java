@@ -47,6 +47,9 @@ public class AuthApiController {
                     )
             );
 
+            // 💡 [여기에 추가] 핸들러로 rememberMe 정보 넘겨주기
+            request.setAttribute("rememberMe", requestDto.rememberMe());
+
             // 2. 인증 성공 시 커스텀 성공 핸들러 실행
             customLoginSuccessHandler.onAuthenticationSuccess(request, response, authentication);
 
