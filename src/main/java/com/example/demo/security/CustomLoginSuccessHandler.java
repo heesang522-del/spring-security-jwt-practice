@@ -1,7 +1,6 @@
 package com.example.demo.security;
 
 import com.example.demo.service.MemberService;
-import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -12,6 +11,7 @@ import org.springframework.security.web.authentication.AuthenticationSuccessHand
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.util.Objects;
 
 @Component
 @RequiredArgsConstructor
@@ -26,10 +26,10 @@ public class CustomLoginSuccessHandler implements AuthenticationSuccessHandler {
             HttpServletRequest request,
             HttpServletResponse response,
             Authentication authentication)
-            throws IOException, ServletException {
+            throws IOException {
 
-        CustomUserDetails user = (CustomUserDetails) authentication.getPrincipal();
-        String memberId = user.getUsername();
+        CustomUserDetails user = (CustomUserDetails) Objects.requireNonNull(authentication.getPrincipal(), "Principal must not be null");
+        String memberId = Objects.requireNonNull(user.getUsername(), "Username must not be null");
         String role = user.getAuthorities().stream()
                 .findFirst()
                 .map(GrantedAuthority::getAuthority)
@@ -46,7 +46,7 @@ public class CustomLoginSuccessHandler implements AuthenticationSuccessHandler {
         Boolean rememberMe = (Boolean) request.getAttribute("rememberMe");
 
         if (Boolean.TRUE.equals(rememberMe)) {
-            // 1) Refresh Token 생성
+            // 1) Refresh Token 생성q
             String refreshToken = jwtTokenProvider.generateRefreshToken(memberId, role);
             // 2) Redis 메모리에 저장
             redisService.saveRefreshToken(memberId, refreshToken, jwtTokenProvider.getRefreshTokenExpiration());

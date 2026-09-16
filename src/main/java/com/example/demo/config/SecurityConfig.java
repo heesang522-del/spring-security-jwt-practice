@@ -8,10 +8,12 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.context.NullSecurityContextRepository;
+import org.springframework.security.web.savedrequest.NullRequestCache;
 
 @Configuration
 @RequiredArgsConstructor
@@ -28,10 +30,10 @@ public class SecurityConfig {
 
         http
                 // 1. 기본 보안 옵션 비활성화
-                .csrf(csrf -> csrf.disable())
-                .cors(cors -> cors.disable())
-                .formLogin(form -> form.disable())
-                .httpBasic(basic -> basic.disable())
+                .csrf(AbstractHttpConfigurer::disable)
+                .cors(AbstractHttpConfigurer::disable)
+                .formLogin(AbstractHttpConfigurer::disable)
+                .httpBasic(AbstractHttpConfigurer::disable)
 
                 // 2. 세션 미사용 및 Context 저장 차단 (Stateless 완벽 적용)
                 .sessionManagement(session -> session
@@ -39,6 +41,11 @@ public class SecurityConfig {
                 )
                 .securityContext(context -> context
                         .securityContextRepository(new NullSecurityContextRepository())
+                )
+
+                // 3. [필수] 미인증 접근 시 Spring Security의 자동 세션 캐싱 차단
+                .requestCache(cache -> cache
+                        .requestCache(new NullRequestCache())
                 )
 
                 // 3. Request URL 권한 설정

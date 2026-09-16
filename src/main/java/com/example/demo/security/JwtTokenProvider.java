@@ -1,18 +1,19 @@
 package com.example.demo.security;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.ExpiredJwtException;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.UnsupportedJwtException;
+import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.security.SignatureException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import java.util.UUID;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
 
 @Slf4j
 @Component
@@ -46,18 +47,33 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    // Refresh Token 생성
+    // 1. Refresh Token 생성 (jti 추가)
     public String generateRefreshToken(String memberId, String role) {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + refreshTokenExpiration);
 
+        // 고유 식별자(UUID) 생성
+        String jti = UUID.randomUUID().toString();
+
         return Jwts.builder()
                 .subject(memberId)
+                .id(jti) // 🎯 id(jti) 추가
                 .claim("role", role)
                 .issuedAt(now)
                 .expiration(expiration)
                 .signWith(secretKey)
                 .compact();
+    }
+
+    // 2. Refresh Token에서 jti(고유 식별자) 추출 메서드 신규 추가
+    public String getJtiFromToken(String token) {
+        Claims claims = Jwts.parser()
+                .verifyWith(secretKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+
+        return claims.getId(); // jti 값 반환
     }
 
     // JWT 검증

@@ -24,6 +24,17 @@
 1. 로그인 성공/실패 핸들러 두 개로 나뉘어있는데, 이러면 서비스쪽이 너무 길어지는 거 아닐까? 따로 서비스 하나 만들까?
 로그인 관련 핸들러 서비스 쪽으로 이전하기
 
+JwtTokenProvider 수정
+Refresh Token 생성 시 jti (UUID) 파라미터/클레임 추가
+
+Refresh Token에서 jti를 추출하는 메서드 추가RefreshTokenRedisService 수정
+Redis에 RT:<memberId>를 Key로, jti를 Value로 저장 및 검증하는 로직 확인
+
+AuthApiController & AuthService에 재발급(reissue) API 추가
+[검증] 쿠키의 Refresh Token에서 추출한 jti == Redis에 저장된 jti 확인
+[정상] 일치 시 $\rightarrow$ 새 Access Token + 새 Refresh Token(새 jti) 발급 후 Redis 갱신 & 쿠키 교체
+[탈취] 불일치 시 $\rightarrow$ 저장된 Redis Key 삭제 (강제 로그아웃) & 쿠키 삭제 후 401 예외 응답
+
 
 이후
 1. AutoLoginDto 삭제하기
