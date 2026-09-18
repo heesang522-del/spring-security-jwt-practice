@@ -77,6 +77,7 @@
                 const response = await fetch(`${contextPath}/api/auth/login`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
+                    credentials: 'include', // 🎯 브라우저가 Set-Cookie를 정상 수용하도록 설정
                     body: JSON.stringify({
                         memberId: document.getElementById('memberId').value,
                         memberPassword: document.getElementById('memberPassword').value,
@@ -90,12 +91,8 @@
                     throw new Error(result.message || '로그인에 실패했습니다.');
                 }
 
-                // 기존 토큰 삭제 후 설정
-                localStorage.removeItem('accessToken');
-
-                const tokenStorage = document.getElementById('remember-me').checked
-                    ? localStorage
-                    : sessionStorage;
+                // Access Token 저장
+                const tokenStorage = document.getElementById('remember-me').checked ? localStorage : sessionStorage;
                 tokenStorage.setItem('accessToken', result.accessToken);
 
                 window.location.href = `${contextPath}/`;

@@ -76,10 +76,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 if (jwtTokenProvider.validateToken(refreshToken)) {
                     String memberId = jwtTokenProvider.getMemberId(refreshToken);
 
-                    // 2) Redis에 저장된 토큰과 일치하는지 비교 (탈취 검증)[cite: 4]
-                    String savedToken = redisService.getRefreshToken(memberId);
+                    // 🎯 2) 쿠키의 토큰에서 jti를 추출하여 Redis 값과 비교
+                    String jtiFromToken = jwtTokenProvider.getJtiFromToken(refreshToken);
+                    String savedJti = redisService.getRefreshToken(memberId);
 
-                    if (savedToken != null && savedToken.equals(refreshToken)) {
+                    if (savedJti != null && savedJti.equals(jtiFromToken)) {
                         MemberDto memberDto = memberService.getMemberById(memberId);
 
                         if (memberDto != null) {
@@ -89,17 +90,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     memberDto.getMemberRole()
                             );
 
-                            // 4) 클라이언트가 새 토큰을 인지할 수 있도록 Response Header에 담아 전달
+                            // 4) Response Header 전달
                             response.setHeader("Authorization", "Bearer " + newAccessToken);
 
-                            // 5) 현재 요청 Thread의 SecurityContext에 인증 정보 등록
+                            // 5) SecurityContext 인증 등록
                             setAuthenticationToContext(memberId);
                         }
                     } else {
-                        clearInvalidCookie(response); // 탈취/불일치 쿠키 삭제[cite: 4]
+                        clearInvalidCookie(response); // 탈취/불일치 jti 쿠키 삭제[cite: 6]
                     }
                 } else {
-                    clearInvalidCookie(response); // 만료된 쿠키 삭제[cite: 4]
+                    clearInvalidCookie(response); // 만료된 쿠키 삭제[cite: 6]
                 }
                 break;
             }

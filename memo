@@ -38,3 +38,5 @@ AuthApiController & AuthService에 재발급(reissue) API 추가
 
 이후
 1. AutoLoginDto 삭제하기
+
+탈취시도 확인

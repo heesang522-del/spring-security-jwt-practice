@@ -3,19 +3,18 @@ package com.example.demo.security;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.security.SignatureException;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import java.util.UUID;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
-
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
+import java.util.UUID;
 
 @Slf4j
+@Getter // 🎯 Lombok @Getter 적용 (refreshTokenExpiration 등의 getter 자동 생성)
 @Component
 public class JwtTokenProvider {
 
@@ -47,17 +46,16 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    // 1. Refresh Token 생성 (jti 추가)
+    // Refresh Token 생성 (jti 추가)
     public String generateRefreshToken(String memberId, String role) {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + refreshTokenExpiration);
 
-        // 고유 식별자(UUID) 생성
         String jti = UUID.randomUUID().toString();
 
         return Jwts.builder()
                 .subject(memberId)
-                .id(jti) // 🎯 id(jti) 추가
+                .id(jti)
                 .claim("role", role)
                 .issuedAt(now)
                 .expiration(expiration)
@@ -65,7 +63,7 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    // 2. Refresh Token에서 jti(고유 식별자) 추출 메서드 신규 추가
+    // Refresh Token에서 jti 추출
     public String getJtiFromToken(String token) {
         Claims claims = Jwts.parser()
                 .verifyWith(secretKey)
@@ -73,7 +71,7 @@ public class JwtTokenProvider {
                 .parseSignedClaims(token)
                 .getPayload();
 
-        return claims.getId(); // jti 값 반환
+        return claims.getId();
     }
 
     // JWT 검증
@@ -101,12 +99,9 @@ public class JwtTokenProvider {
         return getClaims(token).getSubject();
     }
 
+    // JWT에서 role 추출
     public String getRole(String token) {
         return getClaims(token).get("role", String.class);
-    }
-
-    public long getRefreshTokenExpiration() {
-        return refreshTokenExpiration;
     }
 
     private Claims getClaims(String token) {

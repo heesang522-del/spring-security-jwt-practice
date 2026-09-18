@@ -66,12 +66,17 @@ public class SecurityConfig {
                         .anyRequest().permitAll()
                 )
 
-                // 4. 로그아웃 설정
+                // 4. 로그아웃 설정 (기존 URL: /member/logout 유지, POST 요청 시에만 실행)
                 .logout(logout -> logout
                         .logoutUrl("/member/logout")
                         .logoutSuccessUrl("/")
                         .clearAuthentication(true)
                         .addLogoutHandler((request, response, authentication) -> {
+                            // 🎯 POST 요청이 아닐 때 로그아웃 처리(쿠키 삭제)가 동작하지 않도록 방어
+                            if (!"POST".equalsIgnoreCase(request.getMethod())) {
+                                return;
+                            }
+
                             Cookie[] cookies = request.getCookies();
                             if (cookies != null) {
                                 for (Cookie cookie : cookies) {
