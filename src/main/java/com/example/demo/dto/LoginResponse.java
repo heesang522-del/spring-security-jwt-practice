@@ -9,7 +9,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class LoginResponse {
     private String accessToken;
-    private String refreshToken; // 추가됨
     private String tokenType;
     private String memberId;
     private String role;

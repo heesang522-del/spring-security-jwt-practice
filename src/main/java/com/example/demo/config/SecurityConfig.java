@@ -5,6 +5,7 @@ import jakarta.servlet.http.Cookie;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.ResponseCookie;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -80,6 +81,7 @@ public class SecurityConfig {
                             Cookie[] cookies = request.getCookies();
                             if (cookies != null) {
                                 for (Cookie cookie : cookies) {
+                                    // 1. Refresh Token 처리 및 Redis 삭제
                                     if ("refreshToken".equals(cookie.getName())) {
                                         String token = cookie.getValue();
 
@@ -88,11 +90,25 @@ public class SecurityConfig {
                                             redisService.deleteRefreshToken(memberId);
                                         }
 
-                                        Cookie deleteCookie = new Cookie("refreshToken", null);
-                                        deleteCookie.setPath("/");
-                                        deleteCookie.setMaxAge(0);
-                                        response.addCookie(deleteCookie);
-                                        break;
+                                        // refreshToken 쿠키 삭제
+                                        ResponseCookie deleteRefreshCookie = ResponseCookie.from("refreshToken", "")
+                                                .path("/")
+                                                .maxAge(0)
+                                                .httpOnly(true)
+                                                .sameSite("Lax")
+                                                .build();
+                                        response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, deleteRefreshCookie.toString());
+                                    }
+
+                                    // 2. Access Token 쿠키 삭제 (추가된 부분)
+                                    if ("accessToken".equals(cookie.getName())) {
+                                        ResponseCookie deleteAccessCookie = ResponseCookie.from("accessToken", "")
+                                                .path("/")
+                                                .maxAge(0)
+                                                .httpOnly(true)
+                                                .sameSite("Lax")
+                                                .build();
+                                        response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, deleteAccessCookie.toString());
                                     }
                                 }
                             }

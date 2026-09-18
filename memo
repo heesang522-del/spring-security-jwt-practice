@@ -1,15 +1,11 @@
 1. JwtAuthenticationFilter의 response 필요한지 의문
 2. @Slf4j 어노테이션 붙은 값들 다 제거하기
-3. authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request)); 쓸 일 없으면 버리기
 
 이제 해야할 것.
 1. jwt 리프레시 토큰 확인하기
 2. 시간 만료했을 때 잘 작동하는지 확인하기
 3. 암복호화가 잘 되는지 확인
 4. 롤 값 받는지 확인하기.
-
-다음으로
-2. 리프레시토큰이 잘 작동하는지 볼 것 (시간 줄여서 확인할 것)
 
 확장
 1. 토큰 보안 강화 (Refresh Token Rotation - RTR)
@@ -24,19 +20,49 @@
 1. 로그인 성공/실패 핸들러 두 개로 나뉘어있는데, 이러면 서비스쪽이 너무 길어지는 거 아닐까? 따로 서비스 하나 만들까?
 로그인 관련 핸들러 서비스 쪽으로 이전하기
 
-JwtTokenProvider 수정
-Refresh Token 생성 시 jti (UUID) 파라미터/클레임 추가
+RTR (Refresh Token Rotation) 재발급 동작 구조
+재발급 요청이 들어왔을 때 AuthService.reissue 메서드가 수행할 5단계 흐름입니다.
 
-Refresh Token에서 jti를 추출하는 메서드 추가RefreshTokenRedisService 수정
-Redis에 RT:<memberId>를 Key로, jti를 Value로 저장 및 검증하는 로직 확인
+토큰 검증: 전달받은 쿠키의 refreshToken이 유효한 형식인지 검증합니다.
 
-AuthApiController & AuthService에 재발급(reissue) API 추가
-[검증] 쿠키의 Refresh Token에서 추출한 jti == Redis에 저장된 jti 확인
-[정상] 일치 시 $\rightarrow$ 새 Access Token + 새 Refresh Token(새 jti) 발급 후 Redis 갱신 & 쿠키 교체
-[탈취] 불일치 시 $\rightarrow$ 저장된 Redis Key 삭제 (강제 로그아웃) & 쿠키 삭제 후 401 예외 응답
+jti 추출 및 탈취 검증:
 
+refreshToken에서 memberId와 jti를 추출합니다.
+
+Redis에 저장된 jti와 토큰의 jti가 일치하는지 비교합니다.
+
+만약 불일치하거나 Redis 값이 없다면 (탈취 시도): Redis의 데이터를 즉시 삭제하고 예외를 발생시켜 계정을 보호합니다.
+
+토큰 회전 (Rotation):
+
+기존 Redis jti 삭제
+
+새로운 Access Token 생성
+
+새로운 jti를 포함한 새로운 Refresh Token 생성
+
+Redis & 쿠키 갱신:
+
+새 jti를 Redis에 저장
+
+새 Refresh Token을 쿠키(ResponseCookie)에 새로 담음
+
+반환: 클라이언트에게 새 Access Token 반환
+
+1. AuthService.java 내 login 메서드 개편
+기존 실패 핸들러에 있던 예외 처리(휴면 DORMANT, 잠금 LOCKED, 이용 정지 BANNED 등) 로직 흡수
+로그인 성공 시 Redis에 jti 저장 로직 추가
+
+2. AuthApiController.java 내 /api/auth/login 엔드포인트 작성
+로그인 실패 시 적절한 JSON 응답 반환
+로그인 성공 시 Access Token 반환 및 Refresh Token 쿠키 설정
+
+3. 불필요해진 핸들러 파일 정리 및 시큐리티 설정 반영
+4. 전체 RTR 흐름 통합 테스트
 
 이후
 1. AutoLoginDto 삭제하기
+2. 커스텀 성공/실패 핸들러 삭제
 
-탈취시도 확인
+
+탈취시도 제대로 확인할 것

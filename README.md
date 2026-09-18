@@ -375,3 +375,19 @@ JWT 전환이 완료되면 로그인 인증 구조는 다음과 같다.
 * [ ] 백엔드에도 회원가입, 회원 수정 시에 검증 기능 추가
 * [ ] Dto 분리
 * [ ] 필요없는 의존성 삭제
+
+### 🛡️ Stateless JWT & Redis 기반 RTR 인증 체계
+
+---
+본 시스템은 보안성과 서버 성능을 동시에 확보하기 위해 **Stateless JWT**와 **Redis 기반 Refresh Token Rotation (RTR)** 메커니즘을 적용했습니다.
+
+#### 1. 토큰 발급 및 저장 구조
+* **Access Token:** Payload에 `memberId`와 `role`을 담아 단기 유효기간으로 발급하며, `Authorization: Bearer` 헤더를 통해 전송됩니다.
+* **Refresh Token:** 고유 식별자(`jti` - UUID 36byte)를 Payload에 주입하고 `HttpOnly`, `SameSite=Lax` 속성의 Cookie로 안전하게 전달됩니다.
+* **Redis 메모리 최적화:** Redis에는 전체 JWT 토큰 문자열 대신 `RT:<memberId>` 키에 36byte `jti` 값만 저장하여 메모리 사용량을 최소화합니다.
+
+#### 2. RTR (Refresh Token Rotation) 및 탈취 감지 프로세스
+1. **재발급 요청 (`POST /api/auth/reissue`):** Access Token 만료 시 클라이언트는 쿠키의 Refresh Token을 통해 재발급을 요청합니다.
+2. **`jti` 교차 검증:** 요청받은 Refresh Token의 `jti`와 Redis에 저장된 최신 `jti`의 일치 여부를 검증합니다.
+3. **토큰 회전 (Rotation):** 검증 성공 시 기존 Redis `jti`를 즉시 삭제하고, 새로운 Access Token과 새로운 `jti`가 담긴 Refresh Token을 재발급합니다.
+4. **탈취 감지 및 강제 만료:** 이미 사용되었거나 불일치하는 `jti`로 재발급을 시도할 경우, 토큰 탈취 상태로 간주하여 해당 계정의 Redis 토큰 정보를 즉시 삭제하고 세션을 만료 처리합니다.

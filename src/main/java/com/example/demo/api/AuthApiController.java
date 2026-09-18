@@ -1,23 +1,18 @@
 package com.example.demo.api;
 
 import com.example.demo.dto.LoginRequest;
-import com.example.demo.security.CustomLoginFailureHandler;
-import com.example.demo.security.CustomLoginSuccessHandler;
+import com.example.demo.dto.LoginResponse;
+import com.example.demo.service.AuthService;
 import com.example.demo.service.EmailVerificationService;
 import com.example.demo.service.MemberService;
 import com.example.demo.service.MemberService.AccountRestoreType;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
@@ -26,37 +21,68 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AuthApiController {
 
-    private final AuthenticationManager authenticationManager;
-    private final CustomLoginSuccessHandler customLoginSuccessHandler;
-    private final CustomLoginFailureHandler customLoginFailureHandler;
     private final MemberService memberService;
+    private final AuthService authService;
     private final EmailVerificationService emailVerificationService;
 
+    /**
+     * 💡 [REST API 로그인 엔드포인트]
+     * 성공 시 Access Token 및 Cookie(Refresh Token) 반환
+     * 실패 시 예외 메시지(DORMANT, LOCKED, BANNED 등)를 JSON 응답으로 전달
+     */
     @PostMapping("/login")
-    public void login(
+    public ResponseEntity<?> login(
             @RequestBody LoginRequest requestDto,
-            HttpServletRequest request,
-            HttpServletResponse response) throws Exception {
-
+            HttpServletResponse response) {
         try {
-            // 1. CustomAuthenticationProvider를 통한 인증 시도
-            Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(
-                            requestDto.memberId(),
-                            requestDto.memberPassword()
-                    )
+            LoginResponse loginResponse = authService.login(
+                    requestDto.memberId(),
+                    requestDto.memberPassword(),
+                    requestDto.rememberMe(),
+                    response
             );
+            return ResponseEntity.ok(loginResponse);
 
-            // 💡 [여기에 추가] 핸들러로 rememberMe 정보 넘겨주기
-            request.setAttribute("rememberMe", requestDto.rememberMe());
+        } catch (AuthenticationException e) {
+            // 예외 메시지(DORMANT, LOCKED, BANNED 등)를 프론트엔드가 응답받아 분기 처리할 수 있도록 JSON 반환
+            String errorType = e.getMessage();
 
-            // 2. 인증 성공 시 커스텀 성공 핸들러 실행
-            customLoginSuccessHandler.onAuthenticationSuccess(request, response, authentication);
-
-        } catch (AuthenticationException exception) {
-            // 3. 예외(휴면/잠금/정지/비밀번호 오류 등) 발생 시 커스텀 실패 핸들러 실행
-            customLoginFailureHandler.onAuthenticationFailure(request, response, exception);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
+                    "success", false,
+                    "error", errorType,
+                    "message", getErrorMessageDetail(errorType)
+            ));
         }
+    }
+
+    // 💡 [에러 메시지 매핑 헬퍼 메서드]
+    private String getErrorMessageDetail(String errorType) {
+        return switch (errorType) {
+            case "DORMANT" -> "휴면 계정입니다. 계정 재활성화가 필요합니다.";
+            case "DELETED" -> "탈퇴 대기 중인 계정입니다. 계정 복구를 진행해 주세요.";
+            case "LOCKED" -> "보안을 위해 계정이 잠겼습니다. 이메일 해제 링크를 확인해 주세요.";
+            case "BANNED" -> "운영 정책 위반으로 이용이 정지된 계정입니다.";
+            default -> "아이디 또는 비밀번호가 일치하지 않습니다.";
+        };
+    }
+
+    @PostMapping("/reissue")
+    public ResponseEntity<?> reissue(
+            @CookieValue(name = "refreshToken", required = false) String refreshToken,
+            HttpServletResponse response) {
+
+        if (!StringUtils.hasText(refreshToken)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("message", "Refresh Token이 존재하지 않습니다."));
+        }
+
+        // AuthService의 RTR 재발급 로직 호출
+        String newAccessToken = authService.reissue(refreshToken, response);
+
+        return ResponseEntity.ok(Map.of(
+                "accessToken", newAccessToken,
+                "tokenType", "Bearer"
+        ));
     }
 
     /* ================= 계정 복구 / 휴면 해제 API ================= */
