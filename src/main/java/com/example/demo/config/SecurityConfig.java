@@ -1,6 +1,8 @@
 package com.example.demo.config;
 
 import com.example.demo.security.*;
+import com.example.demo.service.AuthService;
+import com.example.demo.service.MemberService;
 import jakarta.servlet.http.Cookie;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -19,12 +21,21 @@ import org.springframework.security.web.savedrequest.NullRequestCache;
 @Configuration
 @RequiredArgsConstructor
 public class SecurityConfig {
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final CustomAuthenticationProvider customAuthenticationProvider;
 
-    // 💡 Redis 서비스 및 JWT 토큰 프로바이더 주입
+    private final CustomAuthenticationProvider customAuthenticationProvider;
+    private final MemberService memberService;
+    private final AuthService authService;
+
+    // Redis 서비스 및 JWT 토큰 프로바이더 주입
     private final RefreshTokenRedisService redisService;
     private final JwtTokenProvider jwtTokenProvider;
+
+    // 💡 2. JwtAuthenticationFilter를 여기서 직접 Bean으로 생성
+    // (JwtAuthenticationFilter.java 클래스의 @Component 어노테이션은 반드시 삭제되어 있어야 합니다!)
+    @Bean
+    public JwtAuthenticationFilter jwtAuthenticationFilter() {
+        return new JwtAuthenticationFilter(jwtTokenProvider, memberService, authService);
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -73,7 +84,6 @@ public class SecurityConfig {
                         .logoutSuccessUrl("/")
                         .clearAuthentication(true)
                         .addLogoutHandler((request, response, authentication) -> {
-                            // 🎯 POST 요청이 아닐 때 로그아웃 처리(쿠키 삭제)가 동작하지 않도록 방어
                             if (!"POST".equalsIgnoreCase(request.getMethod())) {
                                 return;
                             }
@@ -81,7 +91,6 @@ public class SecurityConfig {
                             Cookie[] cookies = request.getCookies();
                             if (cookies != null) {
                                 for (Cookie cookie : cookies) {
-                                    // 1. Refresh Token 처리 및 Redis 삭제
                                     if ("refreshToken".equals(cookie.getName())) {
                                         String token = cookie.getValue();
 
@@ -90,7 +99,6 @@ public class SecurityConfig {
                                             redisService.deleteRefreshToken(memberId);
                                         }
 
-                                        // refreshToken 쿠키 삭제
                                         ResponseCookie deleteRefreshCookie = ResponseCookie.from("refreshToken", "")
                                                 .path("/")
                                                 .maxAge(0)
@@ -100,7 +108,6 @@ public class SecurityConfig {
                                         response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, deleteRefreshCookie.toString());
                                     }
 
-                                    // 2. Access Token 쿠키 삭제 (추가된 부분)
                                     if ("accessToken".equals(cookie.getName())) {
                                         ResponseCookie deleteAccessCookie = ResponseCookie.from("accessToken", "")
                                                 .path("/")
@@ -115,9 +122,9 @@ public class SecurityConfig {
                         })
                 )
 
-                // 5. JWT 필터 위치 지정
+                // 💡 3. 주입받은 필드 대신 메서드 호출(jwtAuthenticationFilter())로 필터 등록!
                 .addFilterBefore(
-                        jwtAuthenticationFilter,
+                        jwtAuthenticationFilter(),
                         UsernamePasswordAuthenticationFilter.class
                 );
 

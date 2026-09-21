@@ -1,6 +1,6 @@
 package com.example.demo.dto;
 
-public record LoginRequest(
+public record LoginRequestDto(
         String memberId,
         String memberPassword,
         boolean rememberMe

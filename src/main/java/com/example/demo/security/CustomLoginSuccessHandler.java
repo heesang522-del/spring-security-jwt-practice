@@ -1,5 +1,6 @@
 package com.example.demo.security;
 
+import com.example.demo.dto.RefreshTokenDto;
 import com.example.demo.service.MemberService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -47,8 +48,9 @@ public class CustomLoginSuccessHandler implements AuthenticationSuccessHandler {
         Boolean rememberMe = (Boolean) request.getAttribute("rememberMe");
 
         if (Boolean.TRUE.equals(rememberMe)) {
-            String refreshToken = jwtTokenProvider.generateRefreshToken(memberId, role);
-            String jti = jwtTokenProvider.getJtiFromToken(refreshToken);
+            RefreshTokenDto refreshTokenDto = jwtTokenProvider.generateRefreshToken(memberId, role);
+            String refreshToken = refreshTokenDto.getRefreshToken();
+            String jti = refreshTokenDto.getJti();
 
             // 1. Redis 저장
             redisService.saveRefreshToken(memberId, jti, jwtTokenProvider.getRefreshTokenExpiration());

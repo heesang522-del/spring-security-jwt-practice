@@ -1,6 +1,6 @@
 package com.example.demo.api;
 
-import com.example.demo.dto.LoginRequest;
+import com.example.demo.dto.LoginRequestDto;
 import com.example.demo.dto.LoginResponse;
 import com.example.demo.service.AuthService;
 import com.example.demo.service.EmailVerificationService;
@@ -32,7 +32,7 @@ public class AuthApiController {
      */
     @PostMapping("/login")
     public ResponseEntity<?> login(
-            @RequestBody LoginRequest requestDto,
+            @RequestBody LoginRequestDto requestDto,
             HttpServletResponse response) {
         try {
             LoginResponse loginResponse = authService.login(

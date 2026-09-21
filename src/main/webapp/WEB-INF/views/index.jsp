@@ -65,7 +65,7 @@
                             <span class="room-card__enter">입장하기 →</span>
                         </div>
                     </a>
-                    <a class="room-card" href="${pageContext.request.contextPath}/chatroom">
+`                    `<a class="room-card" href="${pageContext.request.contextPath}/chatroom">
                         <span class="room-card__art"></span>
                         <div class="room-card__top">
                             <span class="chip">ARTIST</span>
@@ -76,7 +76,7 @@
                             <span class="room-card__host">HOST · 네온사인</span>
                             <span class="room-card__enter">입장하기 →</span>
                         </div>
-                    </a>
+                    </a>``
                 </div>
             </section>
 

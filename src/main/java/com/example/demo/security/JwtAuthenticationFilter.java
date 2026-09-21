@@ -1,6 +1,7 @@
 package com.example.demo.security;
 
 import com.example.demo.dto.MemberDto;
+import com.example.demo.service.AuthService;
 import com.example.demo.service.MemberService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -12,19 +13,32 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
 @Slf4j
-@Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final MemberService memberService;
+    private final AuthService authService;
+
+    // 💡 [추가] 정적 파일(.css, .js, .png 등) 및 파비콘 요청은 JWT 필터 검사를 생략함
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+        String path = request.getRequestURI();
+        return path.endsWith(".css") ||
+                path.endsWith(".js") ||
+                path.endsWith(".png") ||
+                path.endsWith(".jpg") ||
+                path.endsWith(".ico") ||
+                path.startsWith("/css/") ||
+                path.startsWith("/js/") ||
+                path.startsWith("/images/");
+    }
 
     @Override
     protected void doFilterInternal(
@@ -33,41 +47,54 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             FilterChain filterChain)
             throws ServletException, IOException {
 
-        // 💡 [Step 1] Header 또는 Cookie에서 Access Token 추출
-        String accessToken = resolveToken(request);
+        log.info(">>>> Filter Executed | Request URI: {} | Method: {}", request.getRequestURI(), request.getMethod());
 
-        // 💡 [Step 2] Access Token 유효성 검증 및 SecurityContext 등록
+        String accessToken = resolveAccessToken(request);
+        String refreshToken = resolveCookieToken(request, "refreshToken");
+
+        // 1. Access Token이 유효한 경우 -> 정상 인증
         if (accessToken != null && jwtTokenProvider.validateToken(accessToken)) {
             String memberId = jwtTokenProvider.getMemberId(accessToken);
             setAuthenticationToContext(memberId);
         }
+        // 2. Access Token은 만료/없지만 Refresh Token 쿠키가 있는 경우 -> 자동 로그인(reissue)
+        else if (refreshToken != null) {
+            try {
+                log.info("Access Token 만료 감지 -> Refresh Token을 이용한 자동 재발급(RTR) 실행");
 
-        // 💡 [Step 3] 다음 필터로 요청 전달
+                String newAccessToken = authService.reissue(refreshToken, response);
+
+                String memberId = jwtTokenProvider.getMemberId(newAccessToken);
+                setAuthenticationToContext(memberId);
+            } catch (Exception e) {
+                log.warn("Refresh Token 재발급 실패 (만료 또는 탈취 감지): {}", e.getMessage());
+                SecurityContextHolder.clearContext();
+            }
+        }
+
         filterChain.doFilter(request, response);
     }
 
-    // 💡 [토큰 추출 메서드] Header 우선 확인 후, 없으면 Cookie에서 accessToken 추출
-    private String resolveToken(HttpServletRequest request) {
-        // 1. Authorization 헤더 확인 (API / Postman 요청 등)
+    private String resolveAccessToken(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
             return bearerToken.substring(7);
         }
+        return resolveCookieToken(request, "accessToken");
+    }
 
-        // 2. 헤더에 없으면 쿠키 확인 (일반 HTML 페이지 이동 / SSR)
+    private String resolveCookieToken(HttpServletRequest request, String cookieName) {
         Cookie[] cookies = request.getCookies();
         if (cookies != null) {
             for (Cookie cookie : cookies) {
-                if ("accessToken".equals(cookie.getName())) {
+                if (cookieName.equals(cookie.getName())) {
                     return cookie.getValue();
                 }
             }
         }
-
         return null;
     }
 
-    // 💡 [SecurityContext 등록 헬퍼 메서드]
     private void setAuthenticationToContext(String memberId) {
         MemberDto memberDto = memberService.getMemberById(memberId);
         if (memberDto != null) {

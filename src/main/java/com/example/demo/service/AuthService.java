@@ -2,6 +2,7 @@ package com.example.demo.service;
 
 import com.example.demo.dto.LoginResponse;
 import com.example.demo.dto.MemberDto;
+import com.example.demo.dto.RefreshTokenDto;
 import com.example.demo.repository.MemberRepository;
 import com.example.demo.security.CustomAuthenticationProvider;
 import com.example.demo.security.CustomUserDetails;
@@ -78,8 +79,9 @@ public class AuthService {
 
         // 6. Refresh Token 생성 및 Redis jti 저장 (rememberMe 옵션 시 처리)
         if (rememberMe) {
-            String refreshToken = jwtTokenProvider.generateRefreshToken(memberDto.getMemberId(), role);
-            String jti = jwtTokenProvider.getJtiFromToken(refreshToken);
+            RefreshTokenDto refreshTokenDto = jwtTokenProvider.generateRefreshToken(memberDto.getMemberId(), role);
+            String refreshToken = refreshTokenDto.getRefreshToken();
+            String jti = refreshTokenDto.getJti();
 
             // Redis에 jti 저장
             redisService.saveRefreshToken(memberDto.getMemberId(), jti, jwtTokenProvider.getRefreshTokenExpiration());
@@ -116,7 +118,7 @@ public class AuthService {
             throw new BadCredentialsException("유효하지 않거나 만료된 Refresh Token입니다.");
         }
 
-        // 2. 토큰 Payload에서 회원 정보와 jti를 추출합니다.
+        // 2. 토큰 Payload에서 회원 정보와 jti를 추출합니다. (외부에서 들어온 토큰이므로 해석 필요)
         String memberId = jwtTokenProvider.getMemberId(refreshToken);
         String role = jwtTokenProvider.getRole(refreshToken);
         String jti = jwtTokenProvider.getJtiFromToken(refreshToken);
@@ -131,16 +133,19 @@ public class AuthService {
         // 4. [RTR 핵심 Step 1] 기존 Redis jti 삭제
         redisService.deleteRefreshToken(memberId);
 
-        // 5. [RTR 핵심 Step 2] 새 Access Token 및 새 jti를 포함한 새 Refresh Token 생성
+        // 5. [RTR 핵심 Step 2] 새 Access Token 생성 및 RefreshTokenDto를 활용한 새 Refresh Token/jti 획득
         String newAccessToken = jwtTokenProvider.generateAccessToken(memberId, role);
-        String newRefreshToken = jwtTokenProvider.generateRefreshToken(memberId, role);
-        String newJti = jwtTokenProvider.getJtiFromToken(newRefreshToken);
 
-        // 6. [RTR 핵심 Step 3] Redis에 새 jti 저장 (TTL 설정)
+        // 💡 재파싱 없이 DTO에서 바로 토큰과 jti를 추출합니다.
+        RefreshTokenDto refreshTokenDto = jwtTokenProvider.generateRefreshToken(memberId, role);
+        String newRefreshToken = refreshTokenDto.getRefreshToken();
+        String newJti = refreshTokenDto.getJti();
+
+        // 6. [RTR 핵심 Step 3] DTO에서 가져온 newJti를 Redis에 즉시 저장 (TTL 설정)
         redisService.saveRefreshToken(memberId, newJti, jwtTokenProvider.getRefreshTokenExpiration());
 
         // 7. 새 Refresh Token을 HttpOnly 및 SameSite=Lax 속성의 쿠키로 설정하여 Response Header에 추가
-        ResponseCookie cookie = ResponseCookie.from("refreshToken", newRefreshToken)
+        ResponseCookie refreshTokenCookie = ResponseCookie.from("refreshToken", newRefreshToken)
                 .httpOnly(true)
                 .secure(false) // HTTPS 환경 적용 시 true로 변경
                 .path("/")
@@ -148,7 +153,18 @@ public class AuthService {
                 .sameSite("Lax")
                 .build();
 
-        response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, cookie.toString());
+        response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, refreshTokenCookie.toString());
+
+        // 7-2. 새 Access Token도 Cookie로 설정하여 추가
+        ResponseCookie accessTokenCookie = ResponseCookie.from("accessToken", newAccessToken)
+                .httpOnly(true)
+                .secure(false)
+                .path("/")
+                .maxAge(jwtTokenProvider.getAccessTokenExpiration() / 1000)
+                .sameSite("Lax")
+                .build();
+
+        response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, accessTokenCookie.toString());
 
         // 8. 새 Access Token 반환
         return newAccessToken;

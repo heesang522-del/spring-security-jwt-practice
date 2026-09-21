@@ -1,5 +1,6 @@
 package com.example.demo.security;
 
+import com.example.demo.dto.RefreshTokenDto;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.security.SignatureException;
@@ -46,14 +47,13 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    // Refresh Token 생성 (jti 추가)
-    public String generateRefreshToken(String memberId, String role) {
+    // JwtTokenProvider 내 메서드 수정
+    public RefreshTokenDto generateRefreshToken(String memberId, String role) {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + refreshTokenExpiration);
-
         String jti = UUID.randomUUID().toString();
 
-        return Jwts.builder()
+        String refreshToken = Jwts.builder()
                 .subject(memberId)
                 .id(jti)
                 .claim("role", role)
@@ -61,6 +61,9 @@ public class JwtTokenProvider {
                 .expiration(expiration)
                 .signWith(secretKey)
                 .compact();
+
+        // 💡 토큰 문자열과 jti를 같이 묶어서 반환
+        return new RefreshTokenDto(refreshToken, jti);
     }
 
     // Refresh Token에서 jti 추출
