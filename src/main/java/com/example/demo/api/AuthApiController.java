@@ -66,6 +66,7 @@ public class AuthApiController {
         };
     }
 
+    // 연결 안되어있는 코드 (토큰 재발급 확인용)
     @PostMapping("/reissue")
     public ResponseEntity<?> reissue(
             @CookieValue(name = "refreshToken", required = false) String refreshToken,

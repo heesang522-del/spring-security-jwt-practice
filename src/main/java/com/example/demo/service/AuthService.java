@@ -64,20 +64,25 @@ public class AuthService {
         // 4. 마지막 로그인 시간 갱신
         memberRepository.updateLastLoginAt(memberDto.getMemberId());
 
-        // 5. Access Token 생성 및 쿠키 설정 (페이지 이동 시 자동 전송용)
+        // 5. Access Token 생성 및 쿠키 설정
         String accessToken = jwtTokenProvider.generateAccessToken(memberDto.getMemberId(), role);
 
-        ResponseCookie accessTokenCookie = ResponseCookie.from("accessToken", accessToken)
+        ResponseCookie.ResponseCookieBuilder accessCookieBuilder = ResponseCookie.from("accessToken", accessToken)
                 .httpOnly(true)
                 .secure(false) // HTTPS 적용 시 true
                 .path("/")
-                .maxAge(jwtTokenProvider.getAccessTokenExpiration() / 1000) // Access Token 만료시간 적용
-                .sameSite("Lax")
-                .build();
+                .sameSite("Lax");
 
+        // 💡 rememberMe(자동 로그인) 체크 시에만 Access Token에 30분 만료시간을 설정
+        // 미체크(일반 로그인) 시 maxAge를 설정하지 않아 브라우저를 닫으면 바로 삭제되는 '세션 쿠키'가 됨
+        if (rememberMe) {
+            accessCookieBuilder.maxAge(jwtTokenProvider.getAccessTokenExpiration() / 1000);
+        }
+
+        ResponseCookie accessTokenCookie = accessCookieBuilder.build();
         response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, accessTokenCookie.toString());
 
-        // 6. Refresh Token 생성 및 Redis jti 저장 (rememberMe 옵션 시 처리)
+        // 6. Refresh Token 생성 및 Redis jti 저장 (rememberMe 체크 시에만 실행)
         if (rememberMe) {
             RefreshTokenDto refreshTokenDto = jwtTokenProvider.generateRefreshToken(memberDto.getMemberId(), role);
             String refreshToken = refreshTokenDto.getRefreshToken();
@@ -86,7 +91,7 @@ public class AuthService {
             // Redis에 jti 저장
             redisService.saveRefreshToken(memberDto.getMemberId(), jti, jwtTokenProvider.getRefreshTokenExpiration());
 
-            // Refresh Token 쿠키 설정
+            // Refresh Token 쿠키 설정 (14일 지속 쿠키)
             ResponseCookie refreshTokenCookie = ResponseCookie.from("refreshToken", refreshToken)
                     .httpOnly(true)
                     .secure(false)
@@ -104,6 +109,11 @@ public class AuthService {
                 memberDto.getMemberId(),
                 role
         );
+    }
+
+    /**
+     * 💡 [RTR 기반 토큰 재발급 로직]
+     ... (이하 reissue 메서드는 그대로 유지)
     }
 
     /**

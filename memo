@@ -1,19 +1,9 @@
-1. JwtAuthenticationFilter의 response 필요한지 의문
 2. @Slf4j 어노테이션 붙은 값들 다 제거하기
-
-확장
-1. 토큰 보안 강화 (Refresh Token Rotation - RTR)
-2. Access Token 도입 (완벽한 Dual-Token 구조로 확장)
 
 커스텀로그인핸들러 (X)
 
 1. 로그인 성공/실패 핸들러 두 개로 나뉘어있는데, 이러면 서비스쪽이 너무 길어지는 거 아닐까? 따로 서비스 하나 만들까?
 로그인 관련 핸들러 서비스 쪽으로 이전하기
-
-RTR (Refresh Token Rotation) 재발급 동작 구조
-재발급 요청이 들어왔을 때 AuthService.reissue 메서드가 수행할 5단계 흐름입니다.
-
-토큰 검증: 전달받은 쿠키의 refreshToken이 유효한 형식인지 검증합니다.
 
 jti 추출 및 탈취 검증:
 
@@ -51,7 +41,9 @@ Redis & 쿠키 갱신:
 4. 전체 RTR 흐름 통합 테스트
 
 이후
-1. AutoLoginDto 삭제하기
 2. 커스텀 성공/실패 핸들러 삭제
+
+setAuthenticationToContext 메서드 db조회 안하고 리프레시토큰의 memberId 와 대조하여 로그인할 수 있는지 확인해볼 것
+현 방식은 db조회를 하기때문에 이전 방식과 차이가 없음
 
 탈취시도 제대로 확인할 것

@@ -47,8 +47,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             FilterChain filterChain)
             throws ServletException, IOException {
 
-        log.info(">>>> Filter Executed | Request URI: {} | Method: {}", request.getRequestURI(), request.getMethod());
-
         String accessToken = resolveAccessToken(request);
         String refreshToken = resolveCookieToken(request, "refreshToken");
 
@@ -60,8 +58,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // 2. Access Token은 만료/없지만 Refresh Token 쿠키가 있는 경우 -> 자동 로그인(reissue)
         else if (refreshToken != null) {
             try {
-                log.info("Access Token 만료 감지 -> Refresh Token을 이용한 자동 재발급(RTR) 실행");
-
                 String newAccessToken = authService.reissue(refreshToken, response);
 
                 String memberId = jwtTokenProvider.getMemberId(newAccessToken);
