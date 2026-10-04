@@ -62,7 +62,7 @@ public class AuthApiController {
             case "DELETED" -> "탈퇴 대기 중인 계정입니다. 계정 복구를 진행해 주세요.";
             case "LOCKED" -> "보안을 위해 계정이 잠겼습니다. 이메일 해제 링크를 확인해 주세요.";
             case "BANNED" -> "운영 정책 위반으로 이용이 정지된 계정입니다.";
-            default -> "아이디 또는 비밀번호가 일치하지 않습니다.";
+            default -> errorType;
         };
     }
 
