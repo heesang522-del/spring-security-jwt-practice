@@ -14,7 +14,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.StringUtils;
-import org.springframework.http.ResponseCookie;
+import com.example.demo.service.AuthCookieService;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -28,6 +28,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final MemberService memberService;
     private final AuthService authService;
     private final RefreshTokenRedisService redisService;
+    private final AuthCookieService authCookieService;
 
     // 💡 [추가] 정적 파일(.css, .js, .png 등) 및 파비콘 요청은 JWT 필터 검사를 생략함
     @Override
@@ -89,10 +90,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private void rejectSession(HttpServletRequest request, HttpServletResponse response, String code)
             throws IOException {
         SecurityContextHolder.clearContext();
-        for (String name : new String[]{"accessToken", "refreshToken"}) {
-            response.addHeader("Set-Cookie", ResponseCookie.from(name, "").path("/")
-                    .httpOnly(true).secure(true).sameSite("Lax").maxAge(0).build().toString());
-        }
+        authCookieService.clearAuthenticationCookies(response);
         if (request.getServletPath().startsWith("/api/")) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType("application/json;charset=UTF-8");

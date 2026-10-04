@@ -6,8 +6,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseCookie;
+
+import com.example.demo.service.AuthCookieService;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
@@ -25,6 +25,7 @@ public class CustomLoginSuccessHandler implements AuthenticationSuccessHandler {
     private final MemberService memberService;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenRedisService redisService;
+    private final AuthCookieService authCookieService;
 
     @Override
     public void onAuthenticationSuccess(
@@ -54,26 +55,11 @@ public class CustomLoginSuccessHandler implements AuthenticationSuccessHandler {
                 refreshTokenDto == null ? null : refreshTokenDto.getJti(),
                 Boolean.TRUE.equals(rememberMe) ? jwtTokenProvider.getRefreshTokenExpiration()
                         : jwtTokenProvider.getAccessTokenExpiration());
-        ResponseCookie.ResponseCookieBuilder accessCookie = ResponseCookie.from("accessToken", accessToken)
-                .httpOnly(true).secure(true).path("/").sameSite("Lax");
-        if (Boolean.TRUE.equals(rememberMe)) accessCookie.maxAge(jwtTokenProvider.getAccessTokenExpiration() / 1000);
-        response.addHeader(HttpHeaders.SET_COOKIE, accessCookie.build().toString());
-
+        authCookieService.setAccessToken(response, accessToken, Boolean.TRUE.equals(rememberMe));
         if (Boolean.TRUE.equals(rememberMe)) {
-            String refreshToken = refreshTokenDto.getRefreshToken();
-            // 2. ResponseCookie로 변경 (로컬 HTTP 환경 대응 및 SameSite 설정)
-            ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken)
-                    .httpOnly(true)
-                    .secure(true) // 🎯 로컬(http://localhost) 환경이므로 false 지정
-                    .path("/")
-                    .maxAge(jwtTokenProvider.getRefreshTokenExpiration() / 1000)
-                    .sameSite("Lax") // 🎯 페이지 이동 시 쿠키가 유지되도록 설정
-                    .build();
-
-            response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+            authCookieService.setRefreshToken(response, refreshTokenDto.getRefreshToken());
         } else {
-            response.addHeader(HttpHeaders.SET_COOKIE, ResponseCookie.from("refreshToken", "")
-                    .httpOnly(true).secure(true).path("/").sameSite("Lax").maxAge(0).build().toString());
+            authCookieService.clearRefreshToken(response);
         }
         // 4. 프론트엔드에 accessToken 반환
         response.setStatus(HttpServletResponse.SC_OK);

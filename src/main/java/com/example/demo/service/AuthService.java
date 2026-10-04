@@ -10,7 +10,7 @@ import com.example.demo.security.JwtTokenProvider;
 import com.example.demo.security.RefreshTokenRedisService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseCookie;
+
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -33,6 +33,7 @@ public class AuthService {
     private final CustomAuthenticationProvider customAuthenticationProvider;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenRedisService redisService;
+    private final AuthCookieService authCookieService;
 
     /**
      * 💡 [REST API 로그인 및 RTR 토큰 발급 로직]
@@ -74,40 +75,11 @@ public class AuthService {
                 refreshTokenDto == null ? null : refreshTokenDto.getJti(),
                 rememberMe ? jwtTokenProvider.getRefreshTokenExpiration() : jwtTokenProvider.getAccessTokenExpiration());
 
-        ResponseCookie.ResponseCookieBuilder accessCookieBuilder = ResponseCookie.from("accessToken", accessToken)
-                .httpOnly(true)
-                .secure(true) // HTTPS 적용 시 true
-                .path("/")
-                .sameSite("Lax");
-
-        // 💡 rememberMe(자동 로그인) 체크 시에만 Access Token에 30분 만료시간을 설정
-        // 미체크(일반 로그인) 시 maxAge를 설정하지 않아 브라우저를 닫으면 바로 삭제되는 '세션 쿠키'가 됨
+        authCookieService.setAccessToken(response, accessToken, rememberMe);
         if (rememberMe) {
-            accessCookieBuilder.maxAge(jwtTokenProvider.getAccessTokenExpiration() / 1000);
-        }
-
-        ResponseCookie accessTokenCookie = accessCookieBuilder.build();
-        response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, accessTokenCookie.toString());
-
-        // 6. Refresh Token 생성 및 Redis jti 저장 (rememberMe 체크 시에만 실행)
-        if (rememberMe) {
-            String refreshToken = refreshTokenDto.getRefreshToken();
-            // 현재 세션에 연결된 Refresh Token 쿠키 설정
-            ResponseCookie refreshTokenCookie = ResponseCookie.from("refreshToken", refreshToken)
-                    .httpOnly(true)
-                    .secure(true)
-                    .path("/")
-                    .maxAge(jwtTokenProvider.getRefreshTokenExpiration() / 1000)
-                    .sameSite("Lax")
-                    .build();
-
-            response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, refreshTokenCookie.toString());
-        }
-
-        if (!rememberMe) {
-            response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE,
-                    ResponseCookie.from("refreshToken", "").path("/").httpOnly(true)
-                            .secure(true).sameSite("Lax").maxAge(0).build().toString());
+            authCookieService.setRefreshToken(response, refreshTokenDto.getRefreshToken());
+        } else {
+            authCookieService.clearRefreshToken(response);
         }
         return new LoginResponse(
                 accessToken,
@@ -162,27 +134,8 @@ public class AuthService {
             throw new BadCredentialsException("토큰 탈취 위험이 감지되어 모든 세션이 만료되었습니다.");
         }
 
-        // 7. 새 Refresh Token을 HttpOnly 및 SameSite=Lax 속성의 쿠키로 설정하여 Response Header에 추가
-        ResponseCookie refreshTokenCookie = ResponseCookie.from("refreshToken", newRefreshToken)
-                .httpOnly(true)
-                .secure(true) // HTTPS 환경 적용 시 true로 변경
-                .path("/")
-                .maxAge(jwtTokenProvider.getRefreshTokenExpiration() / 1000)
-                .sameSite("Lax")
-                .build();
-
-        response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, refreshTokenCookie.toString());
-
-        // 7-2. 새 Access Token도 Cookie로 설정하여 추가
-        ResponseCookie accessTokenCookie = ResponseCookie.from("accessToken", newAccessToken)
-                .httpOnly(true)
-                .secure(true)
-                .path("/")
-                .maxAge(jwtTokenProvider.getAccessTokenExpiration() / 1000)
-                .sameSite("Lax")
-                .build();
-
-        response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, accessTokenCookie.toString());
+        authCookieService.setRefreshToken(response, newRefreshToken);
+        authCookieService.setAccessToken(response, newAccessToken, true);
 
         // 8. 새 Access Token 반환
         return newAccessToken;

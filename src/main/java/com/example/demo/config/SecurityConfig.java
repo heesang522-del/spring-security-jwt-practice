@@ -7,7 +7,7 @@ import jakarta.servlet.http.Cookie;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.ResponseCookie;
+import com.example.demo.service.AuthCookieService;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -29,12 +29,13 @@ public class SecurityConfig {
     // Redis 서비스 및 JWT 토큰 프로바이더 주입
     private final RefreshTokenRedisService redisService;
     private final JwtTokenProvider jwtTokenProvider;
+    private final AuthCookieService authCookieService;
 
     // 💡 2. JwtAuthenticationFilter를 여기서 직접 Bean으로 생성
     // (JwtAuthenticationFilter.java 클래스의 @Component 어노테이션은 반드시 삭제되어 있어야 합니다!)
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter() {
-        return new JwtAuthenticationFilter(jwtTokenProvider, memberService, authService, redisService);
+        return new JwtAuthenticationFilter(jwtTokenProvider, memberService, authService, redisService, authCookieService);
     }
 
     @Bean
@@ -110,25 +111,11 @@ public class SecurityConfig {
                                             redisService.endSession(memberId, jwtTokenProvider.getSessionId(token));
                                         }
 
-                                        ResponseCookie deleteRefreshCookie = ResponseCookie.from("refreshToken", "")
-                                                .path("/")
-                                                .secure(true)
-                                                .maxAge(0)
-                                                .httpOnly(true)
-                                                .sameSite("Lax")
-                                                .build();
-                                        response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, deleteRefreshCookie.toString());
+                                        authCookieService.clearRefreshToken(response);
                                     }
 
                                     if ("accessToken".equals(cookie.getName())) {
-                                        ResponseCookie deleteAccessCookie = ResponseCookie.from("accessToken", "")
-                                                .path("/")
-                                                .secure(true)
-                                                .maxAge(0)
-                                                .httpOnly(true)
-                                                .sameSite("Lax")
-                                                .build();
-                                        response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, deleteAccessCookie.toString());
+                                        authCookieService.clearAccessToken(response);
                                     }
                                 }
                             }
