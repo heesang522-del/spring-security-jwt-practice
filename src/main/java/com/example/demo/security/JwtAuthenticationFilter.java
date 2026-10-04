@@ -63,7 +63,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 String memberId = jwtTokenProvider.getMemberId(newAccessToken);
                 setAuthenticationToContext(memberId);
             } catch (Exception e) {
-                log.warn("Refresh Token 재발급 실패 (만료 또는 탈취 감지): {}", e.getMessage());
+                log.warn("Refresh Token 재발급 실패 (만료 또는 탈취 감지): {}");
                 SecurityContextHolder.clearContext();
             }
         }

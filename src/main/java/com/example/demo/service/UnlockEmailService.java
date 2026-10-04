@@ -49,7 +49,7 @@ public class UnlockEmailService {
             log.warn("[경고/해제 메일 발송 성공] 회원 ID: {}, 이메일: {}, 사유: {}", memberId, toEmail, failReason);
 
         } catch (MessagingException e) {
-            log.error("[경고 메일 발송 실패] 회원 ID: {}", memberId, e);
+            log.error("[경고 메일 발송 실패] 회원 ID: {}", memberId);
         }
     }
 
@@ -82,7 +82,7 @@ public class UnlockEmailService {
             log.info("[메일 발송 성공] 회원 ID: {}, 이메일: {}", memberId, toEmail);
 
         } catch (MessagingException e) {
-            log.error("[메일 발송 실패] 회원 ID: {}", memberId, e);
+            log.error("[메일 발송 실패] 회원 ID: {}", memberId);
         }
     }
 }
