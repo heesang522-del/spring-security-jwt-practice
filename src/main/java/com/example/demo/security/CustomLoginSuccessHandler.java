@@ -58,7 +58,7 @@ public class CustomLoginSuccessHandler implements AuthenticationSuccessHandler {
             // 2. ResponseCookie로 변경 (로컬 HTTP 환경 대응 및 SameSite 설정)
             ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken)
                     .httpOnly(true)
-                    .secure(false) // 🎯 로컬(http://localhost) 환경이므로 false 지정
+                    .secure(true) // 🎯 로컬(http://localhost) 환경이므로 false 지정
                     .path("/")
                     .maxAge(jwtTokenProvider.getRefreshTokenExpiration() / 1000)
                     .sameSite("Lax") // 🎯 페이지 이동 시 쿠키가 유지되도록 설정

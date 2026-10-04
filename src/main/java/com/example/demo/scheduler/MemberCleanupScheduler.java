@@ -33,7 +33,7 @@ public class MemberCleanupScheduler {
             int deletedCount = memberRepository.deleteExpiredMembers(cutoffDate);
             log.info("영구 삭제 완료된 회원 수: {}명", deletedCount);
         } catch (Exception e) {
-            log.error("탈퇴 회원 자동 삭제 중 오류 발생: ", e);
+            log.error("탈퇴 회원 자동 삭제 중 오류 발생: ");
         }
 
         log.info("============== [탈퇴 회원 영구 삭제 작업 종료] ==============");

@@ -46,6 +46,17 @@ public class SecurityConfig {
                 .cors(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
+                // CSP 설정 추가
+                .headers(headers -> headers
+                        .contentSecurityPolicy(csp -> csp
+                                .policyDirectives(
+                                        "script-src 'self'; " +
+                                                "object-src 'none'; " +
+                                                "base-uri 'self';"
+                                )
+                        )
+                )
+
 
                 // 2. 세션 미사용 및 Context 저장 차단 (Stateless 완벽 적용)
                 .sessionManagement(session -> session

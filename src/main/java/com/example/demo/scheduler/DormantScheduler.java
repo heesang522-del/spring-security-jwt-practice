@@ -30,7 +30,7 @@ public class DormantScheduler {
             int updatedCount = memberRepository.convertToDormantAccounts(cutoffDate);
             log.info("휴면 전환 완료된 회원 수: {}명", updatedCount);
         } catch (Exception e) {
-            log.error("휴면 계정 자동 전환 중 오류 발생: ", e);
+            log.error("휴면 계정 자동 전환 중 오류 발생: ");
         }
 
         log.info("============== [휴면 계정 자동 전환 작업 종료] ==============");

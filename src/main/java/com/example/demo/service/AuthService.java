@@ -69,7 +69,7 @@ public class AuthService {
 
         ResponseCookie.ResponseCookieBuilder accessCookieBuilder = ResponseCookie.from("accessToken", accessToken)
                 .httpOnly(true)
-                .secure(false) // HTTPS 적용 시 true
+                .secure(true) // HTTPS 적용 시 true
                 .path("/")
                 .sameSite("Lax");
 
@@ -94,7 +94,7 @@ public class AuthService {
             // Refresh Token 쿠키 설정 (14일 지속 쿠키)
             ResponseCookie refreshTokenCookie = ResponseCookie.from("refreshToken", refreshToken)
                     .httpOnly(true)
-                    .secure(false)
+                    .secure(true)
                     .path("/")
                     .maxAge(jwtTokenProvider.getRefreshTokenExpiration() / 1000)
                     .sameSite("Lax")
@@ -157,7 +157,7 @@ public class AuthService {
         // 7. 새 Refresh Token을 HttpOnly 및 SameSite=Lax 속성의 쿠키로 설정하여 Response Header에 추가
         ResponseCookie refreshTokenCookie = ResponseCookie.from("refreshToken", newRefreshToken)
                 .httpOnly(true)
-                .secure(false) // HTTPS 환경 적용 시 true로 변경
+                .secure(true) // HTTPS 환경 적용 시 true로 변경
                 .path("/")
                 .maxAge(jwtTokenProvider.getRefreshTokenExpiration() / 1000)
                 .sameSite("Lax")
@@ -168,7 +168,7 @@ public class AuthService {
         // 7-2. 새 Access Token도 Cookie로 설정하여 추가
         ResponseCookie accessTokenCookie = ResponseCookie.from("accessToken", newAccessToken)
                 .httpOnly(true)
-                .secure(false)
+                .secure(true)
                 .path("/")
                 .maxAge(jwtTokenProvider.getAccessTokenExpiration() / 1000)
                 .sameSite("Lax")
