@@ -27,7 +27,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtTokenProvider jwtTokenProvider;
     private final MemberService memberService;
     private final AuthService authService;
-    private final RefreshTokenRedisService redisService;
+    private final LoginSessionRepository loginSessionRepository;
     private final AuthCookieService authCookieService;
 
     // 💡 [추가] 정적 파일(.css, .js, .png 등) 및 파비콘 요청은 JWT 필터 검사를 생략함
@@ -64,7 +64,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (accessToken != null && jwtTokenProvider.validateToken(accessToken)) {
             String memberId = jwtTokenProvider.getMemberId(accessToken);
             if (!jwtTokenProvider.isTokenType(accessToken, "access")
-                    || !redisService.isCurrentSession(memberId, jwtTokenProvider.getSessionId(accessToken))) {
+                    || !loginSessionRepository.isCurrentSession(memberId, jwtTokenProvider.getSessionId(accessToken))) {
                 rejectSession(request, response, "SESSION_REPLACED");
                 return;
             }

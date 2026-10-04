@@ -7,7 +7,8 @@ import com.example.demo.repository.MemberRepository;
 import com.example.demo.security.CustomAuthenticationProvider;
 import com.example.demo.security.CustomUserDetails;
 import com.example.demo.security.JwtTokenProvider;
-import com.example.demo.security.RefreshTokenRedisService;
+import com.example.demo.security.LoginSessionRepository;
+import com.example.demo.security.LoginSessionRepository.RotationResult;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 
@@ -32,7 +33,7 @@ public class AuthService {
     private final EmailVerificationService emailVerificationService;
     private final CustomAuthenticationProvider customAuthenticationProvider;
     private final JwtTokenProvider jwtTokenProvider;
-    private final RefreshTokenRedisService redisService;
+    private final LoginSessionRepository loginSessionRepository;
     private final AuthCookieService authCookieService;
 
     /**
@@ -71,7 +72,7 @@ public class AuthService {
         RefreshTokenDto refreshTokenDto = rememberMe
                 ? jwtTokenProvider.generateRefreshToken(memberDto.getMemberId(), role, sessionId) : null;
         String accessToken = jwtTokenProvider.generateAccessToken(memberDto.getMemberId(), role, sessionId);
-        redisService.startSession(memberDto.getMemberId(), sessionId,
+        loginSessionRepository.replaceCurrentSession(memberDto.getMemberId(), sessionId,
                 refreshTokenDto == null ? null : refreshTokenDto.getJti(),
                 rememberMe ? jwtTokenProvider.getRefreshTokenExpiration() : jwtTokenProvider.getAccessTokenExpiration());
 
@@ -125,12 +126,12 @@ public class AuthService {
         String newJti = refreshTokenDto.getJti();
 
         // 비교, 교체 또는 불일치 시 폐기를 Redis에서 한 번에 처리합니다.
-        long rotationResult = redisService.rotateRefreshToken(
+        RotationResult rotationResult = loginSessionRepository.rotateRefreshToken(
                 memberId, sessionId, jti, newJti, jwtTokenProvider.getRefreshTokenExpiration());
-        if (rotationResult == -1) {
+        if (rotationResult == RotationResult.SESSION_ENDED) {
             throw new BadCredentialsException("SESSION_REPLACED");
         }
-        if (rotationResult != 1) {
+        if (rotationResult == RotationResult.TOKEN_REUSED) {
             throw new BadCredentialsException("토큰 탈취 위험이 감지되어 모든 세션이 만료되었습니다.");
         }
 

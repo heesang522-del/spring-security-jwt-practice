@@ -24,7 +24,7 @@ public class CustomLoginSuccessHandler implements AuthenticationSuccessHandler {
 
     private final MemberService memberService;
     private final JwtTokenProvider jwtTokenProvider;
-    private final RefreshTokenRedisService redisService;
+    private final LoginSessionRepository loginSessionRepository;
     private final AuthCookieService authCookieService;
 
     @Override
@@ -51,7 +51,7 @@ public class CustomLoginSuccessHandler implements AuthenticationSuccessHandler {
         Boolean rememberMe = (Boolean) request.getAttribute("rememberMe");
         RefreshTokenDto refreshTokenDto = Boolean.TRUE.equals(rememberMe)
                 ? jwtTokenProvider.generateRefreshToken(memberId, role, sessionId) : null;
-        redisService.startSession(memberId, sessionId,
+        loginSessionRepository.replaceCurrentSession(memberId, sessionId,
                 refreshTokenDto == null ? null : refreshTokenDto.getJti(),
                 Boolean.TRUE.equals(rememberMe) ? jwtTokenProvider.getRefreshTokenExpiration()
                         : jwtTokenProvider.getAccessTokenExpiration());

@@ -27,7 +27,7 @@ public class SecurityConfig {
     private final AuthService authService;
 
     // Redis 서비스 및 JWT 토큰 프로바이더 주입
-    private final RefreshTokenRedisService redisService;
+    private final LoginSessionRepository loginSessionRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final AuthCookieService authCookieService;
 
@@ -35,7 +35,7 @@ public class SecurityConfig {
     // (JwtAuthenticationFilter.java 클래스의 @Component 어노테이션은 반드시 삭제되어 있어야 합니다!)
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter() {
-        return new JwtAuthenticationFilter(jwtTokenProvider, memberService, authService, redisService, authCookieService);
+        return new JwtAuthenticationFilter(jwtTokenProvider, memberService, authService, loginSessionRepository, authCookieService);
     }
 
     @Bean
@@ -108,7 +108,7 @@ public class SecurityConfig {
 
                                         if (jwtTokenProvider.validateToken(token)) {
                                             String memberId = jwtTokenProvider.getMemberId(token);
-                                            redisService.endSession(memberId, jwtTokenProvider.getSessionId(token));
+                                            loginSessionRepository.endSessionIfCurrent(memberId, jwtTokenProvider.getSessionId(token));
                                         }
 
                                         authCookieService.clearRefreshToken(response);
