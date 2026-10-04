@@ -92,7 +92,11 @@ public class AuthApiController {
         } catch (AuthenticationException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of(
-                            "message", e.getMessage()
+                            "code", "SESSION_REPLACED".equals(e.getMessage())
+                                    ? "SESSION_REPLACED" : "REFRESH_REJECTED",
+                            "message", "SESSION_REPLACED".equals(e.getMessage())
+                                    ? "다른 기기에서 로그인했거나 현재 로그인이 종료되었습니다."
+                                    : e.getMessage()
                     ));
         }
     }

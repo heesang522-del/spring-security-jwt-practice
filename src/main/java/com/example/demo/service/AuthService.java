@@ -20,6 +20,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -65,7 +66,13 @@ public class AuthService {
         memberRepository.updateLastLoginAt(memberDto.getMemberId());
 
         // 5. Access Token 생성 및 쿠키 설정
-        String accessToken = jwtTokenProvider.generateAccessToken(memberDto.getMemberId(), role);
+        String sessionId = UUID.randomUUID().toString();
+        RefreshTokenDto refreshTokenDto = rememberMe
+                ? jwtTokenProvider.generateRefreshToken(memberDto.getMemberId(), role, sessionId) : null;
+        String accessToken = jwtTokenProvider.generateAccessToken(memberDto.getMemberId(), role, sessionId);
+        redisService.startSession(memberDto.getMemberId(), sessionId,
+                refreshTokenDto == null ? null : refreshTokenDto.getJti(),
+                rememberMe ? jwtTokenProvider.getRefreshTokenExpiration() : jwtTokenProvider.getAccessTokenExpiration());
 
         ResponseCookie.ResponseCookieBuilder accessCookieBuilder = ResponseCookie.from("accessToken", accessToken)
                 .httpOnly(true)
@@ -84,14 +91,8 @@ public class AuthService {
 
         // 6. Refresh Token 생성 및 Redis jti 저장 (rememberMe 체크 시에만 실행)
         if (rememberMe) {
-            RefreshTokenDto refreshTokenDto = jwtTokenProvider.generateRefreshToken(memberDto.getMemberId(), role);
             String refreshToken = refreshTokenDto.getRefreshToken();
-            String jti = refreshTokenDto.getJti();
-
-            // Redis에 jti 저장
-            redisService.saveRefreshToken(memberDto.getMemberId(), jti, jwtTokenProvider.getRefreshTokenExpiration());
-
-            // Refresh Token 쿠키 설정 (14일 지속 쿠키)
+            // 현재 세션에 연결된 Refresh Token 쿠키 설정
             ResponseCookie refreshTokenCookie = ResponseCookie.from("refreshToken", refreshToken)
                     .httpOnly(true)
                     .secure(true)
@@ -103,6 +104,11 @@ public class AuthService {
             response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, refreshTokenCookie.toString());
         }
 
+        if (!rememberMe) {
+            response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE,
+                    ResponseCookie.from("refreshToken", "").path("/").httpOnly(true)
+                            .secure(true).sameSite("Lax").maxAge(0).build().toString());
+        }
         return new LoginResponse(
                 accessToken,
                 "Bearer",
@@ -132,27 +138,29 @@ public class AuthService {
         String memberId = jwtTokenProvider.getMemberId(refreshToken);
         String role = jwtTokenProvider.getRole(refreshToken);
         String jti = jwtTokenProvider.getJtiFromToken(refreshToken);
-
-        // 3. Redis에 저장된 최신 jti와 비교하여 토큰 탈취 여부를 검증합니다.
-        if (!redisService.validateJti(memberId, jti)) {
-            // 🚨 탈취 정황 감지: 이미 사용되었거나 비정상적인 jti 요청이므로 계정의 Redis 토큰을 즉시 삭제합니다.
-            redisService.deleteRefreshToken(memberId);
-            throw new BadCredentialsException("토큰 탈취 위험이 감지되어 모든 세션이 만료되었습니다.");
+        String sessionId = jwtTokenProvider.getSessionId(refreshToken);
+        if (!jwtTokenProvider.isTokenType(refreshToken, "refresh")
+                || !StringUtils.hasText(sessionId) || !StringUtils.hasText(jti)) {
+            throw new BadCredentialsException("다시 로그인해 주세요.");
         }
 
-        // 4. [RTR 핵심 Step 1] 기존 Redis jti 삭제
-        redisService.deleteRefreshToken(memberId);
-
-        // 5. [RTR 핵심 Step 2] 새 Access Token 생성 및 RefreshTokenDto를 활용한 새 Refresh Token/jti 획득
-        String newAccessToken = jwtTokenProvider.generateAccessToken(memberId, role);
+        // 새 토큰은 준비만 하고, Redis 교체에 성공한 경우에만 응답으로 전달합니다.
+        String newAccessToken = jwtTokenProvider.generateAccessToken(memberId, role, sessionId);
 
         // 💡 재파싱 없이 DTO에서 바로 토큰과 jti를 추출합니다.
-        RefreshTokenDto refreshTokenDto = jwtTokenProvider.generateRefreshToken(memberId, role);
+        RefreshTokenDto refreshTokenDto = jwtTokenProvider.generateRefreshToken(memberId, role, sessionId);
         String newRefreshToken = refreshTokenDto.getRefreshToken();
         String newJti = refreshTokenDto.getJti();
 
-        // 6. [RTR 핵심 Step 3] DTO에서 가져온 newJti를 Redis에 즉시 저장 (TTL 설정)
-        redisService.saveRefreshToken(memberId, newJti, jwtTokenProvider.getRefreshTokenExpiration());
+        // 비교, 교체 또는 불일치 시 폐기를 Redis에서 한 번에 처리합니다.
+        long rotationResult = redisService.rotateRefreshToken(
+                memberId, sessionId, jti, newJti, jwtTokenProvider.getRefreshTokenExpiration());
+        if (rotationResult == -1) {
+            throw new BadCredentialsException("SESSION_REPLACED");
+        }
+        if (rotationResult != 1) {
+            throw new BadCredentialsException("토큰 탈취 위험이 감지되어 모든 세션이 만료되었습니다.");
+        }
 
         // 7. 새 Refresh Token을 HttpOnly 및 SameSite=Lax 속성의 쿠키로 설정하여 Response Header에 추가
         ResponseCookie refreshTokenCookie = ResponseCookie.from("refreshToken", newRefreshToken)

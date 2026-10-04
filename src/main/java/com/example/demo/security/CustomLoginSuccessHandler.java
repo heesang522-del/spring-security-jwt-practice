@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.util.Objects;
+import java.util.UUID;
 
 @Slf4j
 @Component
@@ -42,19 +43,24 @@ public class CustomLoginSuccessHandler implements AuthenticationSuccessHandler {
         memberService.updateLastLoginAt(memberId);
 
         // 2. Access Token 생성
-        String accessToken = jwtTokenProvider.generateAccessToken(memberId, role);
+        String sessionId = UUID.randomUUID().toString();
+        String accessToken = jwtTokenProvider.generateAccessToken(memberId, role, sessionId);
 
         // 3. 자동 로그인 체크 시 Refresh Token 발급 & Redis jti 저장 & 쿠키 전달
         Boolean rememberMe = (Boolean) request.getAttribute("rememberMe");
+        RefreshTokenDto refreshTokenDto = Boolean.TRUE.equals(rememberMe)
+                ? jwtTokenProvider.generateRefreshToken(memberId, role, sessionId) : null;
+        redisService.startSession(memberId, sessionId,
+                refreshTokenDto == null ? null : refreshTokenDto.getJti(),
+                Boolean.TRUE.equals(rememberMe) ? jwtTokenProvider.getRefreshTokenExpiration()
+                        : jwtTokenProvider.getAccessTokenExpiration());
+        ResponseCookie.ResponseCookieBuilder accessCookie = ResponseCookie.from("accessToken", accessToken)
+                .httpOnly(true).secure(true).path("/").sameSite("Lax");
+        if (Boolean.TRUE.equals(rememberMe)) accessCookie.maxAge(jwtTokenProvider.getAccessTokenExpiration() / 1000);
+        response.addHeader(HttpHeaders.SET_COOKIE, accessCookie.build().toString());
 
         if (Boolean.TRUE.equals(rememberMe)) {
-            RefreshTokenDto refreshTokenDto = jwtTokenProvider.generateRefreshToken(memberId, role);
             String refreshToken = refreshTokenDto.getRefreshToken();
-            String jti = refreshTokenDto.getJti();
-
-            // 1. Redis 저장
-            redisService.saveRefreshToken(memberId, jti, jwtTokenProvider.getRefreshTokenExpiration());
-
             // 2. ResponseCookie로 변경 (로컬 HTTP 환경 대응 및 SameSite 설정)
             ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken)
                     .httpOnly(true)
@@ -65,6 +71,9 @@ public class CustomLoginSuccessHandler implements AuthenticationSuccessHandler {
                     .build();
 
             response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        } else {
+            response.addHeader(HttpHeaders.SET_COOKIE, ResponseCookie.from("refreshToken", "")
+                    .httpOnly(true).secure(true).path("/").sameSite("Lax").maxAge(0).build().toString());
         }
         // 4. 프론트엔드에 accessToken 반환
         response.setStatus(HttpServletResponse.SC_OK);

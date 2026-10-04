@@ -34,13 +34,15 @@ public class JwtTokenProvider {
     }
 
     // Access Token 생성
-    public String generateAccessToken(String memberId, String role) {
+    public String generateAccessToken(String memberId, String role, String sessionId) {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + accessTokenExpiration);
 
         return Jwts.builder()
                 .subject(memberId)
                 .claim("role", role)
+                .claim("sid", sessionId)
+                .claim("type", "access")
                 .issuedAt(now)
                 .expiration(expiration)
                 .signWith(secretKey)
@@ -48,7 +50,7 @@ public class JwtTokenProvider {
     }
 
     // JwtTokenProvider 내 메서드 수정
-    public RefreshTokenDto generateRefreshToken(String memberId, String role) {
+    public RefreshTokenDto generateRefreshToken(String memberId, String role, String sessionId) {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + refreshTokenExpiration);
         String jti = UUID.randomUUID().toString();
@@ -56,6 +58,8 @@ public class JwtTokenProvider {
         String refreshToken = Jwts.builder()
                 .subject(memberId)
                 .id(jti)
+                .claim("sid", sessionId)
+                .claim("type", "refresh")
                 .claim("role", role)
                 .issuedAt(now)
                 .expiration(expiration)
@@ -115,5 +119,13 @@ public class JwtTokenProvider {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+    }
+
+    public String getSessionId(String token) {
+        return getClaims(token).get("sid", String.class);
+    }
+
+    public boolean isTokenType(String token, String type) {
+        return type.equals(getClaims(token).get("type", String.class));
     }
 }

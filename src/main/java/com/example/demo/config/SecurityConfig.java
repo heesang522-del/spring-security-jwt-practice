@@ -34,7 +34,7 @@ public class SecurityConfig {
     // (JwtAuthenticationFilter.java 클래스의 @Component 어노테이션은 반드시 삭제되어 있어야 합니다!)
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter() {
-        return new JwtAuthenticationFilter(jwtTokenProvider, memberService, authService);
+        return new JwtAuthenticationFilter(jwtTokenProvider, memberService, authService, redisService);
     }
 
     @Bean
@@ -102,16 +102,17 @@ public class SecurityConfig {
                             Cookie[] cookies = request.getCookies();
                             if (cookies != null) {
                                 for (Cookie cookie : cookies) {
-                                    if ("refreshToken".equals(cookie.getName())) {
+                                    if ("refreshToken".equals(cookie.getName()) || "accessToken".equals(cookie.getName())) {
                                         String token = cookie.getValue();
 
                                         if (jwtTokenProvider.validateToken(token)) {
                                             String memberId = jwtTokenProvider.getMemberId(token);
-                                            redisService.deleteRefreshToken(memberId);
+                                            redisService.endSession(memberId, jwtTokenProvider.getSessionId(token));
                                         }
 
                                         ResponseCookie deleteRefreshCookie = ResponseCookie.from("refreshToken", "")
                                                 .path("/")
+                                                .secure(true)
                                                 .maxAge(0)
                                                 .httpOnly(true)
                                                 .sameSite("Lax")
@@ -122,6 +123,7 @@ public class SecurityConfig {
                                     if ("accessToken".equals(cookie.getName())) {
                                         ResponseCookie deleteAccessCookie = ResponseCookie.from("accessToken", "")
                                                 .path("/")
+                                                .secure(true)
                                                 .maxAge(0)
                                                 .httpOnly(true)
                                                 .sameSite("Lax")
