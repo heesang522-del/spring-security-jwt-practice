@@ -93,6 +93,8 @@ public class JwtTokenProvider {
             log.error("지원되지 않는 JWT 토큰입니다.");
         } catch (IllegalArgumentException e) {
             log.error("JWT 토큰이 비어있거나 잘못되었습니다.");
+        } catch (MalformedJwtException e) {
+            log.debug("JWT 형식이 올바르지 않습니다.");
         }
         return false;
     }

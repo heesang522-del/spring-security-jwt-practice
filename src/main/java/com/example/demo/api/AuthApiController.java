@@ -69,21 +69,32 @@ public class AuthApiController {
     // 연결 안되어있는 코드 (토큰 재발급 확인용)
     @PostMapping("/reissue")
     public ResponseEntity<?> reissue(
-            @CookieValue(name = "refreshToken", required = false) String refreshToken,
+            @CookieValue(name = "refreshToken", required = false)
+            String refreshToken,
             HttpServletResponse response) {
 
         if (!StringUtils.hasText(refreshToken)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("message", "Refresh Token이 존재하지 않습니다."));
+                    .body(Map.of(
+                            "message", "Refresh Token이 존재하지 않습니다."
+                    ));
         }
 
-        // AuthService의 RTR 재발급 로직 호출
-        String newAccessToken = authService.reissue(refreshToken, response);
+        try {
+            String newAccessToken =
+                    authService.reissue(refreshToken, response);
 
-        return ResponseEntity.ok(Map.of(
-                "accessToken", newAccessToken,
-                "tokenType", "Bearer"
-        ));
+            return ResponseEntity.ok(Map.of(
+                    "accessToken", newAccessToken,
+                    "tokenType", "Bearer"
+            ));
+
+        } catch (AuthenticationException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of(
+                            "message", e.getMessage()
+                    ));
+        }
     }
 
     /* ================= 계정 복구 / 휴면 해제 API ================= */

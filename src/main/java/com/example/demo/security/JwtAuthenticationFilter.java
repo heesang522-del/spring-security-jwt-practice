@@ -30,6 +30,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
         String path = request.getRequestURI();
+
+        // 재발급은 컨트롤러에서 한 번만 처리
+        if ("/api/auth/reissue".equals(path)) {
+            return true;
+        }
         return path.endsWith(".css") ||
                 path.endsWith(".js") ||
                 path.endsWith(".png") ||
