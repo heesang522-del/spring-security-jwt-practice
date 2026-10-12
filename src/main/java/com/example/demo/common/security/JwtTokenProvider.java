@@ -1,6 +1,7 @@
-package com.example.demo.security;
+package com.example.demo.common.security;
 
-import com.example.demo.dto.RefreshTokenDto;
+import com.example.demo.auth.dto.RefreshTokenDto;
+
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.security.SignatureException;
@@ -34,13 +35,12 @@ public class JwtTokenProvider {
     }
 
     // Access Token 생성
-    public String generateAccessToken(String memberId, String role, String sessionId) {
+    public String generateAccessToken(Long memberNumber, String sessionId) {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + accessTokenExpiration);
 
         return Jwts.builder()
-                .subject(memberId)
-                .claim("role", role)
+                .subject(memberNumber.toString())
                 .claim("sid", sessionId)
                 .claim("type", "access")
                 .issuedAt(now)
@@ -50,17 +50,16 @@ public class JwtTokenProvider {
     }
 
     // JwtTokenProvider 내 메서드 수정
-    public RefreshTokenDto generateRefreshToken(String memberId, String role, String sessionId) {
+    public RefreshTokenDto generateRefreshToken(Long memberNumber, String sessionId) {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + refreshTokenExpiration);
         String jti = UUID.randomUUID().toString();
 
         String refreshToken = Jwts.builder()
-                .subject(memberId)
+                .subject(memberNumber.toString())
                 .id(jti)
                 .claim("sid", sessionId)
                 .claim("type", "refresh")
-                .claim("role", role)
                 .issuedAt(now)
                 .expiration(expiration)
                 .signWith(secretKey)
@@ -88,6 +87,7 @@ public class JwtTokenProvider {
                     .verifyWith(secretKey)
                     .build()
                     .parseSignedClaims(token);
+            getMemberNumber(token);
             return true;
         } catch (SecurityException | SignatureException e) {
             log.error("잘못된 JWT 서명입니다.");
@@ -103,16 +103,15 @@ public class JwtTokenProvider {
         return false;
     }
 
-    // JWT에서 memberId 추출
-    public String getMemberId(String token) {
-        return getClaims(token).getSubject();
+    public Long getMemberNumber(String token) {
+        Claims claims = getClaims(token);
+        if (claims.containsKey("role")) {
+            throw new IllegalArgumentException("기존 형식의 토큰입니다. 다시 로그인해 주세요.");
+        }
+        Long memberNumber = Long.valueOf(claims.getSubject());
+        if (memberNumber <= 0) throw new IllegalArgumentException("유효하지 않은 회원 번호입니다.");
+        return memberNumber;
     }
-
-    // JWT에서 role 추출
-    public String getRole(String token) {
-        return getClaims(token).get("role", String.class);
-    }
-
     private Claims getClaims(String token) {
         return Jwts.parser()
                 .verifyWith(secretKey)

@@ -1,13 +1,19 @@
-package com.example.demo.config;
+package com.example.demo.common.config;
 
-import com.example.demo.security.*;
-import com.example.demo.service.AuthService;
-import com.example.demo.service.MemberService;
+import com.example.demo.common.security.JwtAuthenticationFilter;
+import com.example.demo.member.service.MemberService;
+import com.example.demo.auth.security.LoginSessionRepository;
+import com.example.demo.auth.security.CustomAuthenticationProvider;
+import com.example.demo.common.security.JwtTokenProvider;
+
+import com.example.demo.auth.security.*;
+import com.example.demo.common.security.*;
+import com.example.demo.auth.service.AuthService;
 import jakarta.servlet.http.Cookie;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import com.example.demo.service.AuthCookieService;
+import com.example.demo.auth.service.AuthCookieService;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -107,8 +113,8 @@ public class SecurityConfig {
                                         String token = cookie.getValue();
 
                                         if (jwtTokenProvider.validateToken(token)) {
-                                            String memberId = jwtTokenProvider.getMemberId(token);
-                                            loginSessionRepository.endSessionIfCurrent(memberId, jwtTokenProvider.getSessionId(token));
+                                            Long memberNumber = jwtTokenProvider.getMemberNumber(token);
+                                            loginSessionRepository.endSessionIfCurrent(memberNumber, jwtTokenProvider.getSessionId(token));
                                         }
 
                                         authCookieService.clearRefreshToken(response);

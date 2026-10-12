@@ -1,7 +1,6 @@
 package com.example.demo.auth.service;
 
 import com.example.demo.auth.security.LoginUnlockTokenService;
-import com.example.demo.auth.security.LoginUnlockTokenService;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;

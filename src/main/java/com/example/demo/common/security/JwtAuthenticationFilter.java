@@ -1,8 +1,11 @@
-package com.example.demo.security;
+package com.example.demo.common.security;
 
-import com.example.demo.dto.MemberDto;
-import com.example.demo.service.AuthService;
-import com.example.demo.service.MemberService;
+import com.example.demo.member.service.MemberService;
+import com.example.demo.auth.security.LoginSessionRepository;
+import com.example.demo.auth.security.CustomUserDetails;
+import com.example.demo.member.dto.MemberDto;
+
+import com.example.demo.auth.service.AuthService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -14,7 +17,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.StringUtils;
-import com.example.demo.service.AuthCookieService;
+import com.example.demo.auth.service.AuthCookieService;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -62,21 +65,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         // 1. Access Token이 유효한 경우 -> 정상 인증
         if (accessToken != null && jwtTokenProvider.validateToken(accessToken)) {
-            String memberId = jwtTokenProvider.getMemberId(accessToken);
+            Long memberNumber = jwtTokenProvider.getMemberNumber(accessToken);
             if (!jwtTokenProvider.isTokenType(accessToken, "access")
-                    || !loginSessionRepository.isCurrentSession(memberId, jwtTokenProvider.getSessionId(accessToken))) {
+                    || !loginSessionRepository.isCurrentSession(memberNumber, jwtTokenProvider.getSessionId(accessToken))) {
                 rejectSession(request, response, "SESSION_REPLACED");
                 return;
             }
-            setAuthenticationToContext(memberId);
+            setAuthenticationToContext(memberNumber);
         }
         // 2. Access Token은 만료/없지만 Refresh Token 쿠키가 있는 경우 -> 자동 로그인(reissue)
         else if (refreshToken != null) {
             try {
                 String newAccessToken = authService.reissue(refreshToken, response);
 
-                String memberId = jwtTokenProvider.getMemberId(newAccessToken);
-                setAuthenticationToContext(memberId);
+                Long memberNumber = jwtTokenProvider.getMemberNumber(newAccessToken);
+                setAuthenticationToContext(memberNumber);
             } catch (AuthenticationException e) {
                 rejectSession(request, response,
                         "SESSION_REPLACED".equals(e.getMessage()) ? "SESSION_REPLACED" : "SESSION_EXPIRED");
@@ -123,9 +126,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return null;
     }
 
-    private void setAuthenticationToContext(String memberId) {
-        MemberDto memberDto = memberService.getMemberById(memberId);
-        if (memberDto != null) {
+    private void setAuthenticationToContext(Long memberNumber) {
+        MemberDto memberDto = memberService.getMemberByNumber(memberNumber);
+        if (memberDto != null && "ACTIVE".equals(memberDto.getMemberStatus())) {
             CustomUserDetails userDetails = new CustomUserDetails(memberDto);
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(

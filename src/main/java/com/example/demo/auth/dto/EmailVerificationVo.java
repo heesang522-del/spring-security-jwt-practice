@@ -1,4 +1,5 @@
 package com.example.demo.auth.dto;
+
 import lombok.Data;
 import java.time.LocalDateTime;
 

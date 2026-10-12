@@ -1,6 +1,6 @@
-package com.example.demo.service;
+package com.example.demo.auth.service;
 
-import com.example.demo.security.JwtTokenProvider;
+import com.example.demo.common.security.JwtTokenProvider;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;

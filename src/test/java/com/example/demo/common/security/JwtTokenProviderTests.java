@@ -16,20 +16,20 @@ class JwtTokenProviderTests {
 
     @Test
     void accessTokenContainsOnlyMemberNumberAndTimes() {
-        String token = provider.generateAccessToken(42L);
+        String token = provider.generateAccessToken(42L, "session-1");
         var claims = Jwts.parser().verifyWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)))
                 .build().parseSignedClaims(token).getPayload();
-        assertEquals(Set.of("sub", "iat", "exp"), claims.keySet());
+        assertEquals(Set.of("sub", "iat", "exp", "sid", "type"), claims.keySet());
         assertEquals("42", claims.getSubject());
         assertEquals(42L, provider.getMemberNumber(token));
-        assertTrue(provider.validateAccessToken(token));
+        assertTrue(provider.validateToken(token) && provider.isTokenType(token, "access"));
     }
 
     @Test
     void refreshTokenCannotAuthenticateAsAccessToken() {
-        var refresh = provider.generateRefreshToken(42L);
+        var refresh = provider.generateRefreshToken(42L, "session-1");
         assertTrue(provider.validateToken(refresh.getRefreshToken()));
-        assertFalse(provider.validateAccessToken(refresh.getRefreshToken()));
+        assertFalse(provider.validateToken(refresh.getRefreshToken()) && provider.isTokenType(refresh.getRefreshToken(), "access"));
         assertEquals(42L, provider.getMemberNumber(refresh.getRefreshToken()));
         assertEquals(refresh.getJti(), provider.getJtiFromToken(refresh.getRefreshToken()));
     }
@@ -45,7 +45,7 @@ class JwtTokenProviderTests {
     @Test
     void expiredAndMalformedTokensAreRejected() {
         var expired = new JwtTokenProvider(SECRET, -60000, 1209600000);
-        assertFalse(provider.validateAccessToken(expired.generateAccessToken(42L)));
-        assertFalse(provider.validateAccessToken("invalid-token"));
+        assertFalse(provider.validateToken(expired.generateAccessToken(42L, "session-1")));
+        assertFalse(provider.validateToken("invalid-token"));
     }
 }

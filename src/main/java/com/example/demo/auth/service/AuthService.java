@@ -1,14 +1,15 @@
-package com.example.demo.service;
+package com.example.demo.auth.service;
 
-import com.example.demo.dto.LoginResponse;
-import com.example.demo.dto.MemberDto;
-import com.example.demo.dto.RefreshTokenDto;
-import com.example.demo.repository.MemberRepository;
-import com.example.demo.security.CustomAuthenticationProvider;
-import com.example.demo.security.CustomUserDetails;
-import com.example.demo.security.JwtTokenProvider;
-import com.example.demo.security.LoginSessionRepository;
-import com.example.demo.security.LoginSessionRepository.RotationResult;
+import com.example.demo.auth.security.CustomAuthenticationProvider;
+import com.example.demo.auth.security.CustomUserDetails;
+import com.example.demo.auth.dto.LoginResponse;
+import com.example.demo.member.dto.MemberDto;
+import com.example.demo.auth.dto.RefreshTokenDto;
+import com.example.demo.member.repository.MemberRepository;
+
+import com.example.demo.common.security.JwtTokenProvider;
+import com.example.demo.auth.security.LoginSessionRepository;
+import com.example.demo.auth.security.LoginSessionRepository.RotationResult;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -67,16 +68,16 @@ public class AuthService {
         long sessionExpiration = jwtTokenProvider.getAccessTokenExpiration();
 
         if (rememberMe) {
-            refreshTokenDto = jwtTokenProvider.generateRefreshToken(memberDto.getMemberId(), role, sessionId);
+            refreshTokenDto = jwtTokenProvider.generateRefreshToken(memberDto.getId(), sessionId);
             refreshTokenId = refreshTokenDto.getJti();
             sessionExpiration = jwtTokenProvider.getRefreshTokenExpiration();
         }
 
-        String accessToken = jwtTokenProvider.generateAccessToken(memberDto.getMemberId(), role, sessionId);
+        String accessToken = jwtTokenProvider.generateAccessToken(memberDto.getId(), sessionId);
 
         // 5. 새 로그인을 현재 로그인으로 저장
         loginSessionRepository.replaceCurrentSession(
-                memberDto.getMemberId(), sessionId, refreshTokenId, sessionExpiration);
+                memberDto.getId(), sessionId, refreshTokenId, sessionExpiration);
 
         // 6. 쿠키 설정. 자동 로그인 미선택 시 이전 리프레시 쿠키 삭제
         authCookieService.setAccessToken(response, accessToken, rememberMe);
@@ -106,8 +107,11 @@ public class AuthService {
         }
 
         // 2. 토큰 정보 추출 및 종류와 필수 값 확인
-        String memberId = jwtTokenProvider.getMemberId(refreshToken);
-        String role = jwtTokenProvider.getRole(refreshToken);
+        Long memberNumber = jwtTokenProvider.getMemberNumber(refreshToken);
+        MemberDto member = memberRepository.findById(memberNumber);
+        if (member == null || !"ACTIVE".equals(member.getMemberStatus())) {
+            throw new BadCredentialsException("이용할 수 없는 계정입니다.");
+        }
         String jti = jwtTokenProvider.getJtiFromToken(refreshToken);
         String sessionId = jwtTokenProvider.getSessionId(refreshToken);
         if (!jwtTokenProvider.isTokenType(refreshToken, "refresh")
@@ -116,15 +120,15 @@ public class AuthService {
         }
 
         // 3. 기존 로그인 번호로 새 토큰 준비
-        String newAccessToken = jwtTokenProvider.generateAccessToken(memberId, role, sessionId);
+        String newAccessToken = jwtTokenProvider.generateAccessToken(memberNumber, sessionId);
 
-        RefreshTokenDto refreshTokenDto = jwtTokenProvider.generateRefreshToken(memberId, role, sessionId);
+        RefreshTokenDto refreshTokenDto = jwtTokenProvider.generateRefreshToken(memberNumber, sessionId);
         String newRefreshToken = refreshTokenDto.getRefreshToken();
         String newJti = refreshTokenDto.getJti();
 
         // 4. Redis에서 토큰 확인과 교체. 실패 시 응답하지 않고 종료
         RotationResult rotationResult = loginSessionRepository.rotateRefreshToken(
-                memberId, sessionId, jti, newJti, jwtTokenProvider.getRefreshTokenExpiration());
+                memberNumber, sessionId, jti, newJti, jwtTokenProvider.getRefreshTokenExpiration());
         if (rotationResult == RotationResult.SESSION_ENDED) {
             throw new BadCredentialsException("SESSION_REPLACED");
         }

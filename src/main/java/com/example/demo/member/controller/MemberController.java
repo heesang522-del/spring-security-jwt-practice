@@ -1,9 +1,10 @@
-package com.example.demo.controller;
+package com.example.demo.member.controller;
 
-import com.example.demo.dto.MemberDto;
-import com.example.demo.security.CustomUserDetails;
-import com.example.demo.security.LoginSessionRepository;
-import com.example.demo.service.MemberService;
+import com.example.demo.member.service.MemberService;
+import com.example.demo.auth.security.CustomUserDetails;
+import com.example.demo.member.dto.MemberDto;
+
+import com.example.demo.auth.security.LoginSessionRepository;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -140,7 +141,7 @@ public class MemberController {
             memberService.deleteMember(memberId);
 
             // 1. Redis에서 Refresh Token 삭제
-            loginSessionRepository.revokeCurrentSession(memberId);
+            loginSessionRepository.revokeCurrentSession(userDetails.getMemberDto().getId());
 
             // 2. 브라우저의 refreshToken 쿠키 만료 처리
             Cookie[] cookies = request.getCookies();
