@@ -1,10 +1,8 @@
-package com.example.demo.common.security;
+package com.example.demo.security;
 
-import com.example.demo.auth.security.CustomUserDetails;
-
-import com.example.demo.member.dto.MemberDto;
-import com.example.demo.auth.service.AuthService;
-import com.example.demo.member.service.MemberService;
+import com.example.demo.dto.MemberDto;
+import com.example.demo.service.AuthService;
+import com.example.demo.service.MemberService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -16,6 +14,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.StringUtils;
+import com.example.demo.service.AuthCookieService;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -27,11 +27,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtTokenProvider jwtTokenProvider;
     private final MemberService memberService;
     private final AuthService authService;
+    private final LoginSessionRepository loginSessionRepository;
+    private final AuthCookieService authCookieService;
 
     // 💡 [추가] 정적 파일(.css, .js, .png 등) 및 파비콘 요청은 JWT 필터 검사를 생략함
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
-        String path = request.getRequestURI();
+        String path = request.getServletPath();
+
+        // 재발급은 컨트롤러에서 한 번만 처리
+        if ("/api/auth/reissue".equals(path) || "/api/auth/login".equals(path)
+                || "/auth/login".equals(path)) {
+            return true;
+        }
         return path.endsWith(".css") ||
                 path.endsWith(".js") ||
                 path.endsWith(".png") ||
@@ -53,24 +61,46 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String refreshToken = resolveCookieToken(request, "refreshToken");
 
         // 1. Access Token이 유효한 경우 -> 정상 인증
-        if (accessToken != null && jwtTokenProvider.validateAccessToken(accessToken)) {
-            Long memberNumber = jwtTokenProvider.getMemberNumber(accessToken);
-            setAuthenticationToContext(memberNumber);
+        if (accessToken != null && jwtTokenProvider.validateToken(accessToken)) {
+            String memberId = jwtTokenProvider.getMemberId(accessToken);
+            if (!jwtTokenProvider.isTokenType(accessToken, "access")
+                    || !loginSessionRepository.isCurrentSession(memberId, jwtTokenProvider.getSessionId(accessToken))) {
+                rejectSession(request, response, "SESSION_REPLACED");
+                return;
+            }
+            setAuthenticationToContext(memberId);
         }
         // 2. Access Token은 만료/없지만 Refresh Token 쿠키가 있는 경우 -> 자동 로그인(reissue)
         else if (refreshToken != null) {
             try {
                 String newAccessToken = authService.reissue(refreshToken, response);
 
-                Long memberNumber = jwtTokenProvider.getMemberNumber(newAccessToken);
-                setAuthenticationToContext(memberNumber);
-            } catch (Exception e) {
-                log.warn("Refresh Token 재발급 실패 (만료 또는 탈취 감지): {}", e.getMessage());
-                SecurityContextHolder.clearContext();
+                String memberId = jwtTokenProvider.getMemberId(newAccessToken);
+                setAuthenticationToContext(memberId);
+            } catch (AuthenticationException e) {
+                rejectSession(request, response,
+                        "SESSION_REPLACED".equals(e.getMessage()) ? "SESSION_REPLACED" : "SESSION_EXPIRED");
+                return;
             }
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private void rejectSession(HttpServletRequest request, HttpServletResponse response, String code)
+            throws IOException {
+        SecurityContextHolder.clearContext();
+        authCookieService.clearAuthenticationCookies(response);
+        if (request.getServletPath().startsWith("/api/")) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json;charset=UTF-8");
+            String message = "SESSION_REPLACED".equals(code)
+                    ? "다른 기기에서 로그인했거나 현재 로그인이 종료되었습니다."
+                    : "로그인이 만료되었습니다. 다시 로그인해 주세요.";
+            response.getWriter().write("{\"code\":\"" + code + "\",\"message\":\"" + message + "\"}");
+        } else {
+            response.sendRedirect(request.getContextPath() + "/auth/login?reason=" + code);
+        }
     }
 
     private String resolveAccessToken(HttpServletRequest request) {
@@ -93,9 +123,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return null;
     }
 
-    private void setAuthenticationToContext(Long memberNumber) {
-        MemberDto memberDto = memberService.getMemberByNumber(memberNumber);
-        if (memberDto != null && "ACTIVE".equals(memberDto.getMemberStatus())) {
+    private void setAuthenticationToContext(String memberId) {
+        MemberDto memberDto = memberService.getMemberById(memberId);
+        if (memberDto != null) {
             CustomUserDetails userDetails = new CustomUserDetails(memberDto);
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(

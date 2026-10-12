@@ -1,8 +1,9 @@
-package com.example.demo.common.security;
+package com.example.demo.security;
 
-import com.example.demo.auth.dto.RefreshTokenDto;
+import com.example.demo.dto.RefreshTokenDto;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,12 +34,15 @@ public class JwtTokenProvider {
     }
 
     // Access Token 생성
-    public String generateAccessToken(Long memberNumber) {
+    public String generateAccessToken(String memberId, String role, String sessionId) {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + accessTokenExpiration);
 
         return Jwts.builder()
-                .subject(memberNumber.toString())
+                .subject(memberId)
+                .claim("role", role)
+                .claim("sid", sessionId)
+                .claim("type", "access")
                 .issuedAt(now)
                 .expiration(expiration)
                 .signWith(secretKey)
@@ -46,14 +50,17 @@ public class JwtTokenProvider {
     }
 
     // JwtTokenProvider 내 메서드 수정
-    public RefreshTokenDto generateRefreshToken(Long memberNumber) {
+    public RefreshTokenDto generateRefreshToken(String memberId, String role, String sessionId) {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + refreshTokenExpiration);
         String jti = UUID.randomUUID().toString();
 
         String refreshToken = Jwts.builder()
-                .subject(memberNumber.toString())
+                .subject(memberId)
                 .id(jti)
+                .claim("sid", sessionId)
+                .claim("type", "refresh")
+                .claim("role", role)
                 .issuedAt(now)
                 .expiration(expiration)
                 .signWith(secretKey)
@@ -81,41 +88,44 @@ public class JwtTokenProvider {
                     .verifyWith(secretKey)
                     .build()
                     .parseSignedClaims(token);
-            getMemberNumber(token);
             return true;
-        } catch (SecurityException e) {
-            log.error("잘못된 JWT 서명입니다.", e);
+        } catch (SecurityException | SignatureException e) {
+            log.error("잘못된 JWT 서명입니다.");
         } catch (ExpiredJwtException e) {
-            log.error("만료된 JWT 토큰입니다.", e);
-        } catch (JwtException e) {
-            log.error("지원되지 않는 JWT 토큰입니다.", e);
+            log.error("만료된 JWT 토큰입니다.");
+        } catch (UnsupportedJwtException e) {
+            log.error("지원되지 않는 JWT 토큰입니다.");
         } catch (IllegalArgumentException e) {
-            log.error("JWT 토큰이 비어있거나 잘못되었습니다.", e);
+            log.error("JWT 토큰이 비어있거나 잘못되었습니다.");
+        } catch (MalformedJwtException e) {
+            log.debug("JWT 형식이 올바르지 않습니다.");
         }
         return false;
     }
 
-    // JWT subject는 로그인 아이디가 아닌 내부 회원 번호입니다.
-    public Long getMemberNumber(String token) {
-        Claims claims = getClaims(token);
-        if (claims.containsKey("role")) {
-            throw new IllegalArgumentException("기존 형식의 토큰입니다. 다시 로그인해 주세요.");
-        }
-        Long memberNumber = Long.valueOf(claims.getSubject());
-        if (memberNumber <= 0) {
-            throw new IllegalArgumentException("유효하지 않은 회원 번호입니다.");
-        }
-        return memberNumber;
+    // JWT에서 memberId 추출
+    public String getMemberId(String token) {
+        return getClaims(token).getSubject();
     }
 
-    public boolean validateAccessToken(String token) {
-        return validateToken(token) && getJtiFromToken(token) == null;
+    // JWT에서 role 추출
+    public String getRole(String token) {
+        return getClaims(token).get("role", String.class);
     }
+
     private Claims getClaims(String token) {
         return Jwts.parser()
                 .verifyWith(secretKey)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+    }
+
+    public String getSessionId(String token) {
+        return getClaims(token).get("sid", String.class);
+    }
+
+    public boolean isTokenType(String token, String type) {
+        return type.equals(getClaims(token).get("type", String.class));
     }
 }

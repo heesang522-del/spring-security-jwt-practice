@@ -1,5 +1,6 @@
 <%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" session="false"%>
 <!doctype html>
+<%@ taglib prefix="c" uri="jakarta.tags.core" %>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -32,6 +33,12 @@
                 <p class="auth-description">계정에 로그인하고 오늘의 음악 이야기를 이어가세요.</p>
             </div>
 
+            <c:if test="${param.reason == 'SESSION_REPLACED'}">
+                <p role="alert">다른 기기에서 로그인했거나 현재 로그인이 종료되었습니다. 다시 로그인해 주세요.</p>
+            </c:if>
+            <c:if test="${param.reason == 'SESSION_EXPIRED'}">
+                <p role="alert">로그인이 만료되었습니다. 다시 로그인해 주세요.</p>
+            </c:if>
             <form id="loginForm" class="auth-form">
                 <div class="input-group">
                     <label for="memberId">아이디</label>

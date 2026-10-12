@@ -1,25 +1,26 @@
-package com.example.demo.auth.service;
+package com.example.demo.service;
 
-import com.example.demo.auth.dto.LoginResponse;
-import com.example.demo.member.dto.MemberDto;
-import com.example.demo.auth.dto.RefreshTokenDto;
-import com.example.demo.member.repository.MemberRepository;
-import com.example.demo.auth.security.CustomAuthenticationProvider;
-import com.example.demo.auth.security.CustomUserDetails;
-import com.example.demo.common.security.JwtTokenProvider;
-import com.example.demo.auth.security.RefreshTokenRedisService;
+import com.example.demo.dto.LoginResponse;
+import com.example.demo.dto.MemberDto;
+import com.example.demo.dto.RefreshTokenDto;
+import com.example.demo.repository.MemberRepository;
+import com.example.demo.security.CustomAuthenticationProvider;
+import com.example.demo.security.CustomUserDetails;
+import com.example.demo.security.JwtTokenProvider;
+import com.example.demo.security.LoginSessionRepository;
+import com.example.demo.security.LoginSessionRepository.RotationResult;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseCookie;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -31,76 +32,58 @@ public class AuthService {
     private final EmailVerificationService emailVerificationService;
     private final CustomAuthenticationProvider customAuthenticationProvider;
     private final JwtTokenProvider jwtTokenProvider;
-    private final RefreshTokenRedisService redisService;
+    private final LoginSessionRepository loginSessionRepository;
+    private final AuthCookieService authCookieService;
 
     /**
-     * 💡 [REST API 로그인 및 RTR 토큰 발급 로직]
-     * 계정 상태(휴면, 잠금, 정지 등)를 검증하고 인증 성공 시 토큰 생성 및 Redis에 jti를 저장합니다.
+     * 회원 인증 후 현재 로그인을 교체하고, 선택한 로그인 방식에 맞춰 쿠키를 설정합니다.
      */
     @Transactional
-    public LoginResponse login(String memberId, String memberPassword, boolean rememberMe, HttpServletResponse response) {
+    public LoginResponse login(String memberId, String memberPassword, boolean rememberMe,
+                               HttpServletResponse response) {
         // 1. 입력값 검증
         if (!StringUtils.hasText(memberId) || !StringUtils.hasText(memberPassword)) {
             throw new BadCredentialsException("아이디와 비밀번호를 입력해 주세요.");
         }
 
-        // 2. CustomAuthenticationProvider를 통해 사용자 인증 수행
-        Authentication authentication;
-        try {
-            authentication = customAuthenticationProvider.authenticate(
-                    UsernamePasswordAuthenticationToken.unauthenticated(memberId, memberPassword)
-            );
-        } catch (AuthenticationException e) {
-            throw e;
-        }
+        // 2. 회원 인증 및 현재 요청의 인증 정보 설정
+        Authentication authentication = customAuthenticationProvider.authenticate(
+                UsernamePasswordAuthenticationToken.unauthenticated(memberId, memberPassword)
+        );
 
-        // 3. SecurityContext에 인증 객체 저장
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
         MemberDto memberDto = userDetails.getMemberDto();
         String role = memberDto.getMemberRole();
 
-        // 4. 마지막 로그인 시간 갱신
+        // 3. 마지막 로그인 시간 갱신
         memberRepository.updateLastLoginAt(memberDto.getMemberId());
 
-        // 5. Access Token 생성 및 쿠키 설정
-        String accessToken = jwtTokenProvider.generateAccessToken(memberDto.getId());
+        // 4. 로그인 번호 생성. 리프레시 토큰은 자동 로그인 선택 시에만 생성
+        String sessionId = UUID.randomUUID().toString();
+        RefreshTokenDto refreshTokenDto = null;
+        String refreshTokenId = null;
+        long sessionExpiration = jwtTokenProvider.getAccessTokenExpiration();
 
-        ResponseCookie.ResponseCookieBuilder accessCookieBuilder = ResponseCookie.from("accessToken", accessToken)
-                .httpOnly(true)
-                .secure(false) // HTTPS 적용 시 true
-                .path("/")
-                .sameSite("Lax");
-
-        // 💡 rememberMe(자동 로그인) 체크 시에만 Access Token에 30분 만료시간을 설정
-        // 미체크(일반 로그인) 시 maxAge를 설정하지 않아 브라우저를 닫으면 바로 삭제되는 '세션 쿠키'가 됨
         if (rememberMe) {
-            accessCookieBuilder.maxAge(jwtTokenProvider.getAccessTokenExpiration() / 1000);
+            refreshTokenDto = jwtTokenProvider.generateRefreshToken(memberDto.getMemberId(), role, sessionId);
+            refreshTokenId = refreshTokenDto.getJti();
+            sessionExpiration = jwtTokenProvider.getRefreshTokenExpiration();
         }
 
-        ResponseCookie accessTokenCookie = accessCookieBuilder.build();
-        response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, accessTokenCookie.toString());
+        String accessToken = jwtTokenProvider.generateAccessToken(memberDto.getMemberId(), role, sessionId);
 
-        // 6. Refresh Token 생성 및 Redis jti 저장 (rememberMe 체크 시에만 실행)
+        // 5. 새 로그인을 현재 로그인으로 저장
+        loginSessionRepository.replaceCurrentSession(
+                memberDto.getMemberId(), sessionId, refreshTokenId, sessionExpiration);
+
+        // 6. 쿠키 설정. 자동 로그인 미선택 시 이전 리프레시 쿠키 삭제
+        authCookieService.setAccessToken(response, accessToken, rememberMe);
         if (rememberMe) {
-            RefreshTokenDto refreshTokenDto = jwtTokenProvider.generateRefreshToken(memberDto.getId());
-            String refreshToken = refreshTokenDto.getRefreshToken();
-            String jti = refreshTokenDto.getJti();
-
-            // Redis에 jti 저장
-            redisService.saveRefreshToken(memberDto.getId(), jti, jwtTokenProvider.getRefreshTokenExpiration());
-
-            // Refresh Token 쿠키 설정 (14일 지속 쿠키)
-            ResponseCookie refreshTokenCookie = ResponseCookie.from("refreshToken", refreshToken)
-                    .httpOnly(true)
-                    .secure(false)
-                    .path("/")
-                    .maxAge(jwtTokenProvider.getRefreshTokenExpiration() / 1000)
-                    .sameSite("Lax")
-                    .build();
-
-            response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, refreshTokenCookie.toString());
+            authCookieService.setRefreshToken(response, refreshTokenDto.getRefreshToken());
+        } else {
+            authCookieService.clearRefreshToken(response);
         }
 
         return new LoginResponse(
@@ -112,74 +95,47 @@ public class AuthService {
     }
 
     /**
-     * 💡 [RTR 기반 토큰 재발급 로직]
-     ... (이하 reissue 메서드는 그대로 유지)
-    }
-
-    /**
-     * 💡 [RTR 기반 토큰 재발급 로직]
-     * Refresh Token을 검증하고 Redis의 jti와 교차 검증한 뒤,
-     * 새로운 Access Token과 Refresh Token(새 jti)을 발급(Rotation)합니다.
+     * 리프레시 토큰을 검증하고 같은 로그인 번호를 유지하며 토큰을 교체합니다.
+     * Redis 교체에 성공한 경우에만 새 토큰을 전달합니다.
      */
     @Transactional
     public String reissue(String refreshToken, HttpServletResponse response) {
-        // 1. 전달받은 Refresh Token의 기본 유효성(서명, 만료일 등)을 검증합니다.
+        // 1. 서명과 만료 시간 확인
         if (!StringUtils.hasText(refreshToken) || !jwtTokenProvider.validateToken(refreshToken)) {
             throw new BadCredentialsException("유효하지 않거나 만료된 Refresh Token입니다.");
         }
 
-        // 2. 토큰 Payload에서 회원 정보와 jti를 추출합니다. (외부에서 들어온 토큰이므로 해석 필요)
-        Long memberNumber = jwtTokenProvider.getMemberNumber(refreshToken);
-        MemberDto member = memberRepository.findById(memberNumber);
-        if (member == null || !"ACTIVE".equals(member.getMemberStatus())) {
-            throw new BadCredentialsException("이용할 수 없는 계정입니다.");
-        }
+        // 2. 토큰 정보 추출 및 종류와 필수 값 확인
+        String memberId = jwtTokenProvider.getMemberId(refreshToken);
+        String role = jwtTokenProvider.getRole(refreshToken);
         String jti = jwtTokenProvider.getJtiFromToken(refreshToken);
-
-        // 3. Redis에 저장된 최신 jti와 비교하여 토큰 탈취 여부를 검증합니다.
-        if (!redisService.validateJti(memberNumber, jti)) {
-            // 🚨 탈취 정황 감지: 이미 사용되었거나 비정상적인 jti 요청이므로 계정의 Redis 토큰을 즉시 삭제합니다.
-            redisService.deleteRefreshToken(memberNumber);
-            throw new BadCredentialsException("토큰 탈취 위험이 감지되어 모든 세션이 만료되었습니다.");
+        String sessionId = jwtTokenProvider.getSessionId(refreshToken);
+        if (!jwtTokenProvider.isTokenType(refreshToken, "refresh")
+                || !StringUtils.hasText(sessionId) || !StringUtils.hasText(jti)) {
+            throw new BadCredentialsException("다시 로그인해 주세요.");
         }
 
-        // 4. [RTR 핵심 Step 1] 기존 Redis jti 삭제
-        redisService.deleteRefreshToken(memberNumber);
+        // 3. 기존 로그인 번호로 새 토큰 준비
+        String newAccessToken = jwtTokenProvider.generateAccessToken(memberId, role, sessionId);
 
-        // 5. [RTR 핵심 Step 2] 새 Access Token 생성 및 RefreshTokenDto를 활용한 새 Refresh Token/jti 획득
-        String newAccessToken = jwtTokenProvider.generateAccessToken(memberNumber);
-
-        // 💡 재파싱 없이 DTO에서 바로 토큰과 jti를 추출합니다.
-        RefreshTokenDto refreshTokenDto = jwtTokenProvider.generateRefreshToken(memberNumber);
+        RefreshTokenDto refreshTokenDto = jwtTokenProvider.generateRefreshToken(memberId, role, sessionId);
         String newRefreshToken = refreshTokenDto.getRefreshToken();
         String newJti = refreshTokenDto.getJti();
 
-        // 6. [RTR 핵심 Step 3] DTO에서 가져온 newJti를 Redis에 즉시 저장 (TTL 설정)
-        redisService.saveRefreshToken(memberNumber, newJti, jwtTokenProvider.getRefreshTokenExpiration());
+        // 4. Redis에서 토큰 확인과 교체. 실패 시 응답하지 않고 종료
+        RotationResult rotationResult = loginSessionRepository.rotateRefreshToken(
+                memberId, sessionId, jti, newJti, jwtTokenProvider.getRefreshTokenExpiration());
+        if (rotationResult == RotationResult.SESSION_ENDED) {
+            throw new BadCredentialsException("SESSION_REPLACED");
+        }
+        if (rotationResult == RotationResult.TOKEN_REUSED) {
+            throw new BadCredentialsException("토큰 탈취 위험이 감지되어 모든 세션이 만료되었습니다.");
+        }
 
-        // 7. 새 Refresh Token을 HttpOnly 및 SameSite=Lax 속성의 쿠키로 설정하여 Response Header에 추가
-        ResponseCookie refreshTokenCookie = ResponseCookie.from("refreshToken", newRefreshToken)
-                .httpOnly(true)
-                .secure(false) // HTTPS 환경 적용 시 true로 변경
-                .path("/")
-                .maxAge(jwtTokenProvider.getRefreshTokenExpiration() / 1000)
-                .sameSite("Lax")
-                .build();
+        // 5. 교체 성공 후 쿠키 설정 및 액세스 토큰 반환
+        authCookieService.setRefreshToken(response, newRefreshToken);
+        authCookieService.setAccessToken(response, newAccessToken, true);
 
-        response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, refreshTokenCookie.toString());
-
-        // 7-2. 새 Access Token도 Cookie로 설정하여 추가
-        ResponseCookie accessTokenCookie = ResponseCookie.from("accessToken", newAccessToken)
-                .httpOnly(true)
-                .secure(false)
-                .path("/")
-                .maxAge(jwtTokenProvider.getAccessTokenExpiration() / 1000)
-                .sameSite("Lax")
-                .build();
-
-        response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, accessTokenCookie.toString());
-
-        // 8. 새 Access Token 반환
         return newAccessToken;
     }
 

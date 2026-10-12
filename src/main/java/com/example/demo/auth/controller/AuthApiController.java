@@ -62,28 +62,43 @@ public class AuthApiController {
             case "DELETED" -> "탈퇴 대기 중인 계정입니다. 계정 복구를 진행해 주세요.";
             case "LOCKED" -> "보안을 위해 계정이 잠겼습니다. 이메일 해제 링크를 확인해 주세요.";
             case "BANNED" -> "운영 정책 위반으로 이용이 정지된 계정입니다.";
-            default -> "아이디 또는 비밀번호가 일치하지 않습니다.";
+            default -> errorType;
         };
     }
 
     // 연결 안되어있는 코드 (토큰 재발급 확인용)
     @PostMapping("/reissue")
     public ResponseEntity<?> reissue(
-            @CookieValue(name = "refreshToken", required = false) String refreshToken,
+            @CookieValue(name = "refreshToken", required = false)
+            String refreshToken,
             HttpServletResponse response) {
 
         if (!StringUtils.hasText(refreshToken)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("message", "Refresh Token이 존재하지 않습니다."));
+                    .body(Map.of(
+                            "message", "Refresh Token이 존재하지 않습니다."
+                    ));
         }
 
-        // AuthService의 RTR 재발급 로직 호출
-        String newAccessToken = authService.reissue(refreshToken, response);
+        try {
+            String newAccessToken =
+                    authService.reissue(refreshToken, response);
 
-        return ResponseEntity.ok(Map.of(
-                "accessToken", newAccessToken,
-                "tokenType", "Bearer"
-        ));
+            return ResponseEntity.ok(Map.of(
+                    "accessToken", newAccessToken,
+                    "tokenType", "Bearer"
+            ));
+
+        } catch (AuthenticationException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of(
+                            "code", "SESSION_REPLACED".equals(e.getMessage())
+                                    ? "SESSION_REPLACED" : "REFRESH_REJECTED",
+                            "message", "SESSION_REPLACED".equals(e.getMessage())
+                                    ? "다른 기기에서 로그인했거나 현재 로그인이 종료되었습니다."
+                                    : e.getMessage()
+                    ));
+        }
     }
 
     /* ================= 계정 복구 / 휴면 해제 API ================= */

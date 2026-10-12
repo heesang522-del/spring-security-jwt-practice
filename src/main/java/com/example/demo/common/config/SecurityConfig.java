@@ -1,14 +1,13 @@
-package com.example.demo.common.config;
+package com.example.demo.config;
 
-import com.example.demo.auth.security.*;
-import com.example.demo.common.security.*;
-import com.example.demo.auth.service.AuthService;
-import com.example.demo.member.service.MemberService;
+import com.example.demo.security.*;
+import com.example.demo.service.AuthService;
+import com.example.demo.service.MemberService;
 import jakarta.servlet.http.Cookie;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.ResponseCookie;
+import com.example.demo.service.AuthCookieService;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -28,14 +27,15 @@ public class SecurityConfig {
     private final AuthService authService;
 
     // Redis 서비스 및 JWT 토큰 프로바이더 주입
-    private final RefreshTokenRedisService redisService;
+    private final LoginSessionRepository loginSessionRepository;
     private final JwtTokenProvider jwtTokenProvider;
+    private final AuthCookieService authCookieService;
 
     // 💡 2. JwtAuthenticationFilter를 여기서 직접 Bean으로 생성
     // (JwtAuthenticationFilter.java 클래스의 @Component 어노테이션은 반드시 삭제되어 있어야 합니다!)
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter() {
-        return new JwtAuthenticationFilter(jwtTokenProvider, memberService, authService);
+        return new JwtAuthenticationFilter(jwtTokenProvider, memberService, authService, loginSessionRepository, authCookieService);
     }
 
     @Bean
@@ -47,6 +47,17 @@ public class SecurityConfig {
                 .cors(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
+                // CSP 설정 추가
+                .headers(headers -> headers
+                        .contentSecurityPolicy(csp -> csp
+                                .policyDirectives(
+                                        "script-src 'self'; " +
+                                                "object-src 'none'; " +
+                                                "base-uri 'self';"
+                                )
+                        )
+                )
+
 
                 // 2. 세션 미사용 및 Context 저장 차단 (Stateless 완벽 적용)
                 .sessionManagement(session -> session
@@ -92,31 +103,19 @@ public class SecurityConfig {
                             Cookie[] cookies = request.getCookies();
                             if (cookies != null) {
                                 for (Cookie cookie : cookies) {
-                                    if ("refreshToken".equals(cookie.getName())) {
+                                    if ("refreshToken".equals(cookie.getName()) || "accessToken".equals(cookie.getName())) {
                                         String token = cookie.getValue();
 
                                         if (jwtTokenProvider.validateToken(token)) {
-                                            Long memberNumber = jwtTokenProvider.getMemberNumber(token);
-                                            redisService.deleteRefreshToken(memberNumber);
+                                            String memberId = jwtTokenProvider.getMemberId(token);
+                                            loginSessionRepository.endSessionIfCurrent(memberId, jwtTokenProvider.getSessionId(token));
                                         }
 
-                                        ResponseCookie deleteRefreshCookie = ResponseCookie.from("refreshToken", "")
-                                                .path("/")
-                                                .maxAge(0)
-                                                .httpOnly(true)
-                                                .sameSite("Lax")
-                                                .build();
-                                        response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, deleteRefreshCookie.toString());
+                                        authCookieService.clearRefreshToken(response);
                                     }
 
                                     if ("accessToken".equals(cookie.getName())) {
-                                        ResponseCookie deleteAccessCookie = ResponseCookie.from("accessToken", "")
-                                                .path("/")
-                                                .maxAge(0)
-                                                .httpOnly(true)
-                                                .sameSite("Lax")
-                                                .build();
-                                        response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, deleteAccessCookie.toString());
+                                        authCookieService.clearAccessToken(response);
                                     }
                                 }
                             }
